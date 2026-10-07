@@ -1,4 +1,4 @@
-# INQOLAB 개발 참고
+# AGI 개발 참고
 
 작성일: 2026-10-07
 기준: [PRD.md](PRD.md), [AGENT.md](AGENT.md), [SKILL.md](SKILL.md).
