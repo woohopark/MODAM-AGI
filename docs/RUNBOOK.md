@@ -20,3 +20,13 @@ Groq 키는 환경의 GROQ_API_KEY로 주입한다. MODEM이 아닌 MODAM_GROQ_M
 
 기존 코드 조회: git show baseline-monolith-cadea94:src/modam/api.py.
 기존 DB/볼륨은 보존하며 첫 묶음은 접속/초기화하지 않는다. 신규 영속화 구현 시 별도 DB로 검증한다.
+
+## 현재 작업 환경의 Groq 설정
+
+사용자 제공 키는 Git 제외 .local/groq.env(권한 0600)에 저장하고 .local/with-groq(권한 0700)로 실행 시 환경변수에 주입한다. 전역 셸 환경이나 다른 클라우드 환경에 자동 등록한 것은 아니다. 이 두 파일은 현재 환경의 로컬 설정이며 복제/패키지에 포함되지 않는다.
+
+```bash
+.local/with-groq uv run modam-evaluate --mode groq --output .local/reports/groq-live.json
+```
+
+검증된 현재 모델은 openai/gpt-oss-120b이며 호출 제공자는 Groq다. 환경변수 MODAM_GROQ_MODEL로 교체 가능하다. 기존 llama-3.3-70b-versatile은 현재 제공 목록에 없으며 model_not_found로 구분한다. 프로세스 종료 시 실행 환경변수는 사라지고 로컬 설정 파일은 유지된다.

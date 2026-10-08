@@ -104,3 +104,15 @@ async def test_missing_key_timeout_and_missing_usage():
             assert model.attempts == (0 if not key else 1)
         finally:
             await model.close()
+
+
+async def test_removed_model_has_precise_safe_error_code():
+    model = GroqModel(
+        Settings(groq_api_key=SecretStr("secret-test-key")),
+        transport=httpx.MockTransport(lambda r: httpx.Response(404, text="sensitive error")),
+    )
+    try:
+        with pytest.raises(ModelError, match="model_not_found"):
+            await model.plan(request(), [], [])
+    finally:
+        await model.close()

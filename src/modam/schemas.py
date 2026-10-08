@@ -38,7 +38,11 @@ class Request(Contract):
 
 class ToolCall(Contract):
     tool: str = Field(min_length=1, max_length=100)
-    scope: str = Field(min_length=1, max_length=100)
+    scope: str = Field(
+        min_length=1,
+        max_length=100,
+        description="Exact data scope identifier stated by the user; never a tool/action name.",
+    )
     arguments: dict[str, JsonValue] = Field(default_factory=dict)
 
 

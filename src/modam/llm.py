@@ -14,6 +14,7 @@ class ModelError(Exception):
     def __init__(self, code: str) -> None:
         safe = {
             "model_key_missing",
+            "model_not_found",
             "model_timeout",
             "model_connection_error",
             "model_authentication_failed",
@@ -62,7 +63,10 @@ class GroqModel:
             "Use only the trusted tool catalog. Never invent IDs, scopes, quantities or facts. "
             "Ask a clarification question when required inputs are missing. "
             "A purchase/write request is unsupported in this foundation. "
-            "Use scope as an exact supplied identifier. Schema: "
+            "The scope is the data identifier from user text, independent of tool/action. "
+            "For example, 'logistics 범위에서 규정을 조회' means tool=rag.search, "
+            "scope=logistics. Never copy a tool name or action into scope. "
+            "If the data scope is missing, ask a question. Schema: "
             + json.dumps(Plan.model_json_schema(), ensure_ascii=False)
         )
         content = await self._complete(
@@ -131,7 +135,11 @@ class GroqModel:
         except httpx.HTTPError:
             raise ModelError("model_connection_error") from None
         if response.status_code != 200:
-            codes = {401: "model_authentication_failed", 429: "model_rate_limited"}
+            codes = {
+                401: "model_authentication_failed",
+                404: "model_not_found",
+                429: "model_rate_limited",
+            }
             raise ModelError(codes.get(response.status_code, "model_unavailable"))
         try:
             body = response.json()

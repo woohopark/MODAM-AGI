@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MODAM_", extra="ignore")
 
-    groq_model: str = Field(default="llama-3.3-70b-versatile", min_length=1, max_length=100)
+    groq_model: str = Field(default="openai/gpt-oss-120b", min_length=1, max_length=100)
     groq_timeout_seconds: float = Field(default=30, ge=1, le=120)
     groq_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="GROQ_API_KEY")
     groq_max_tokens: int = Field(default=1200, ge=100, le=4000)
@@ -16,4 +16,4 @@ class Settings(BaseSettings):
     tool_timeout_seconds: float = Field(default=15, gt=0, le=120)
     run_timeout_seconds: float = Field(default=90, gt=0, le=300)
     config_version: str = "foundation-v1"
-    prompt_version: str = "orchestration-v1"
+    prompt_version: str = "orchestration-v2"

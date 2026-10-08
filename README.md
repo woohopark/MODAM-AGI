@@ -32,3 +32,5 @@ groq는 환경변수 GROQ_API_KEY를 사용해 합성 질문의 계획만 실제
 
 [MODAM-RAG](https://github.com/woohopark/MODAM-RAG) · [MODAM-ONTOLOGY](https://github.com/woohopark/MODAM-ONTOLOGY) · [MODAM-CHAT](https://github.com/woohopark/MODAM-CHAT).
 이전 단일 서비스는 [문서 이력](docs/legacy/INDEX.md)과 Git 기준점에 보존했다. 이전 44+8 테스트를 신규 구조 통과로 집계하지 않는다.
+
+현재 환경에서는 `.local/with-groq uv run modam-evaluate --mode groq`로 로컬 보안 설정을 실행 환경변수에 주입한다. 로컬 키 파일/주입기는 Git 제외다. 현재 검증 모델은 Groq 제공 `openai/gpt-oss-120b`이며 실제 계획 7/7·합성 근거 답변 계약 1/1을 확인했다. 상세 범위는 [검토 기록](docs/FOUNDATION_REVIEW.md)을 따른다.

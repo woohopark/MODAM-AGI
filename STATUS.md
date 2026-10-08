@@ -15,10 +15,12 @@
 ## 이번 검증
 
 - Ruff lint/format, mypy strict 통과.
-- 단위/계약 테스트 29개 통과.
+- 단위/계약 테스트 최초 29개, Groq 설정 보완 후 30개 통과.
 - 합성 경계 평가 14개 × 측정 3회 = 42개 통과(별도 워밍업 1회).
 - wheel/sdist 빌드 및 wheel의 신규 코드/데이터셋 포함 확인.
-- 실제 Groq 평가: 환경 키 미주입으로 blocked, 네트워크 시도 0회.
+- 최초 실제 Groq 평가는 키 미주입으로 blocked였다. 이후 사용자 제공 키를 로컬 보안 설정에서 환경변수로 주입했다.
+- 기존 모델은 현재 계정 목록에서 없어 HTTP 404였다. 제공되는 openai/gpt-oss-120b로 변경했다(Groq API 사용).
+- 프롬프트 v2에서 실제 Groq 계획 7/7, 합성 근거 답변 계약 1/1 통과. 실제 MCP는 여전히 미연결이다.
 - 실제 MCP/DB/HTTP/승인/ERP: 이번 묶음에서 미구현·미실행.
 
 CI 파일은 작성했으며 원격 Actions 실행 성공을 주장하지 않는다. 상세 증거는 docs/FOUNDATION_REVIEW.md와 .local/reports(로컬, Git 제외)에 있다.
