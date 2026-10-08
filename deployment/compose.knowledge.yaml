@@ -1,0 +1,54 @@
+# Optional independent knowledge services; apply after compose.local.yaml or compose.yaml.
+services:
+  agi:
+    environment: &knowledge-env
+      MODAM_RAG_MCP_URL: http://rag:8201/mcp
+      MODAM_ONTOLOGY_MCP_URL: http://ontology:8202/mcp
+      MODAM_RAG_SERVICE_KEY: ${MODAM_RAG_SERVICE_KEY:?Run knowledge setup}
+      MODAM_ONTOLOGY_SERVICE_KEY: ${MODAM_ONTOLOGY_SERVICE_KEY:?Run knowledge setup}
+      NO_PROXY: localhost,127.0.0.1,postgres,agi,rag,ontology
+      no_proxy: localhost,127.0.0.1,postgres,agi,rag,ontology
+  worker:
+    environment: *knowledge-env
+    depends_on:
+      rag: {condition: service_healthy}
+      ontology: {condition: service_healthy}
+  rag:
+    build:
+      context: ../../modam-rag
+    restart: unless-stopped
+    environment:
+      KNOWLEDGE_SERVICE_KEY: ${MODAM_RAG_SERVICE_KEY:?Run knowledge setup}
+      KNOWLEDGE_AUTHORITY_URL: http://agi:8000/internal/tool-authorize
+      KNOWLEDGE_PORT: 8201
+      NO_PROXY: localhost,127.0.0.1,agi,rag,ontology
+      no_proxy: localhost,127.0.0.1,agi,rag,ontology
+    volumes: [rag-data:/data]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8201/health', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    depends_on:
+      agi: {condition: service_started}
+  ontology:
+    build:
+      context: ../../modam-ontology
+    restart: unless-stopped
+    environment:
+      KNOWLEDGE_SERVICE_KEY: ${MODAM_ONTOLOGY_SERVICE_KEY:?Run knowledge setup}
+      KNOWLEDGE_AUTHORITY_URL: http://agi:8000/internal/tool-authorize
+      KNOWLEDGE_PORT: 8202
+      NO_PROXY: localhost,127.0.0.1,agi,rag,ontology
+      no_proxy: localhost,127.0.0.1,agi,rag,ontology
+    volumes: [ontology-data:/data]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8202/health', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    depends_on:
+      agi: {condition: service_started}
+volumes:
+  rag-data:
+  ontology-data:

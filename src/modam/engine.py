@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from time import perf_counter
 from uuid import uuid4
@@ -35,6 +36,7 @@ class Engine:
         registry: ToolRegistry,
         observer: Observer,
         settings: Settings,
+        evidence_authorizer: Callable[[str, list[Evidence]], Awaitable[bool]] | None = None,
     ) -> None:
         self.model = model
         self.gateway = gateway
@@ -42,6 +44,7 @@ class Engine:
         self.registry = registry
         self.observer = observer
         self.settings = settings
+        self.evidence_authorizer = evidence_authorizer
 
     async def run(self, request: Request) -> RunResult:
         state = RunState(request)
@@ -160,6 +163,10 @@ class Engine:
                 if problem:
                     return self._result(state, "clarification_required", problem)
                 self._emit(state, "evidence.verified", "verified")
+            if self.evidence_authorizer and not await self.evidence_authorizer(
+                state.request.subject_ref, evidence
+            ):
+                return self._result(state, "denied", "evidence_scope_denied")
             if state.model_calls >= self.settings.max_model_calls:
                 return self._result(state, "failed", "model_budget_exceeded")
             with self.observer.span("model.answer"):
@@ -170,6 +177,10 @@ class Engine:
                 return self._result(state, "failed", "model_invalid_citation")
             if not await self._still_authorized(state):
                 return self._result(state, "denied", "permission_denied")
+            if self.evidence_authorizer and not await self.evidence_authorizer(
+                state.request.subject_ref, evidence
+            ):
+                return self._result(state, "denied", "evidence_scope_denied")
             result = self._result(state, "completed", message=answer.answer)
             result.evidence = list(
                 {e.ref: e for e in evidence if e.ref in answer.citation_ids}.values()

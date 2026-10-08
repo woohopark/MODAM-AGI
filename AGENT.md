@@ -15,3 +15,5 @@
 ## CHAT 연동 기준 — 2026-10-08 승인
 
 [CHAT 계약](docs/CHAT_INTEGRATION.md), [실행/배포](docs/CHAT_DEPLOYMENT.md)를 따른다. 인증·DB 상태는 chat/에서 담당하고 업무 Engine에 로그인/HTTP 분기를 넣지 않는다. 대화 원문은 모델 답변을 위한 사용자별 DB 상태이며 로그/관측 원문이 아니다. 현재 ACL을 조회·재생·새 실행마다 확인한다. 최근 완료 턴만 사용하고 과거 기업 답변을 최신 근거로 재사용하지 않는다. UI 다크 모드는 CHAT 책임이다. 실제 통신·대역·외부 배포 상태를 각각 기록한다.
+
+현재 독립 지식 MCP 구현/검증은 [지식 서비스 통합](docs/KNOWLEDGE_INTEGRATION.md)을 따른다.

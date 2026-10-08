@@ -18,5 +18,9 @@ class Settings(BaseSettings):
     max_evidence_chars: int = Field(default=20000, ge=100, le=50000)
     tool_timeout_seconds: float = Field(default=15, gt=0, le=120)
     run_timeout_seconds: float = Field(default=90, gt=0, le=300)
+    rag_mcp_url: str = ""
+    rag_service_key: SecretStr = SecretStr("")
+    ontology_mcp_url: str = ""
+    ontology_service_key: SecretStr = SecretStr("")
     config_version: str = "chat-v1"
     prompt_version: str = "orchestration-v2"

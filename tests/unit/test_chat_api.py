@@ -48,3 +48,44 @@ def test_auth_ownership_idempotency_and_cancel(tmp_path):
         )
         assert client.post("/v1/auth/logout", headers=headers).status_code == 204
         assert client.get("/v1/session", headers=headers).status_code == 401
+
+
+def test_internal_authority_current_grants_and_service_separation(tmp_path):
+    from time import time
+
+    from pydantic import SecretStr
+
+    from modam.chat.models import User
+    from modam.config import Settings
+
+    db = Database(f"sqlite:///{tmp_path}/policy.db")
+    db.migrate_for_tests()
+    uid = db.create_user("alice", "test-password-123")
+    with db.sessions.begin() as session:
+        session.get(User, uid).grants = [{"action": "documents.read", "scope": "warehouse"}]
+    config = Settings(rag_service_key=SecretStr("r" * 32), ontology_service_key=SecretStr("o" * 32))
+    claims = {
+        "sub": uid,
+        "action": "documents.read",
+        "scope": "warehouse",
+        "aud": "rag",
+        "request_id": "req",
+        "exp": int(time()) + 30,
+    }
+    with TestClient(create_app(db, config)) as client:
+        assert client.post("/internal/tool-authorize", json=claims).status_code == 403
+        headers = {"Authorization": "Bearer " + "r" * 32}
+        assert client.post("/internal/tool-authorize", json=claims, headers=headers).json() == {
+            "allowed": True
+        }
+        assert (
+            client.post(
+                "/internal/tool-authorize", json={**claims, "aud": "ontology"}, headers=headers
+            ).status_code
+            == 403
+        )
+        with db.sessions.begin() as session:
+            session.get(User, uid).grants = []
+        assert client.post("/internal/tool-authorize", json=claims, headers=headers).json() == {
+            "allowed": False
+        }

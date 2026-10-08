@@ -1,6 +1,7 @@
 """Private AGI HTTP API. Browser access is mediated by the same-origin BFF."""
 
 import asyncio
+import hmac
 import json
 import re
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -26,6 +27,7 @@ from modam.chat.repository import (
     run_data,
 )
 from modam.config import Settings
+from modam.mcp_gateway import Claims, resource_access
 from modam.schemas import Contract
 
 
@@ -74,19 +76,26 @@ class NewUser(Login):
     password: str = Field(min_length=12, max_length=256)
 
 
-def visible(user: User, run: Run) -> bool:
-    return all(any(g == label for g in user.grants) for label in run.evidence_labels)
+def visible(user: User, run: Run, settings: Settings | None = None) -> bool:
+    return all(
+        any(
+            g.get("action") == label["action"] and g.get("scope") == label["scope"]
+            for g in user.grants
+        )
+        for label in run.evidence_labels
+    ) and resource_access(settings or Settings(), user.id, run.evidence_labels)
 
 
-def user_run_data(user: User, run: Run) -> dict[str, object]:
+def user_run_data(user: User, run: Run, settings: Settings | None = None) -> dict[str, object]:
     data = run_data(run)
-    if not visible(user, run):
+    if not visible(user, run, settings):
         data["answer"] = "현재 조회 권한이 없습니다."
     return data
 
 
-def create_app(database: Database | None = None) -> FastAPI:
-    store = database or Database(Settings().database_url.get_secret_value())
+def create_app(database: Database | None = None, settings: Settings | None = None) -> FastAPI:
+    config = settings or Settings()
+    store = database or Database(config.database_url.get_secret_value())
     app = FastAPI(title="MODAM AGI chat", docs_url=None, redoc_url=None)
 
     @app.middleware("http")
@@ -126,6 +135,33 @@ def create_app(database: Database | None = None) -> FastAPI:
         with store.sessions() as db:
             db.execute(select(1))
         return {"status": "ok"}
+
+    @app.post("/internal/tool-authorize")
+    def authorize_tool(body: Claims, request: Request) -> dict[str, bool]:
+        expected = {
+            "rag": (config.rag_service_key, "documents.read"),
+            "ontology": (config.ontology_service_key, "inventory.read"),
+        }.get(body.aud)
+        credential = request.headers.get("authorization", "").removeprefix("Bearer ")
+        if (
+            expected is None
+            or len(expected[0].get_secret_value()) < 32
+            or not hmac.compare_digest(credential, expected[0].get_secret_value())
+            or body.action != expected[1]
+            or not time() < body.exp <= time() + 35
+        ):
+            raise HTTPException(403, "tool_denied")
+        with store.sessions() as db:
+            current = db.get(User, body.sub)
+            allowed = bool(
+                current
+                and current.active
+                and any(
+                    grant.get("action") == body.action and grant.get("scope") == body.scope
+                    for grant in current.grants
+                )
+            )
+        return {"allowed": allowed}
 
     @app.post("/v1/auth/login")
     def login(body: Login) -> dict[str, str]:
@@ -201,7 +237,7 @@ def create_app(database: Database | None = None) -> FastAPI:
                         "id": run.id,
                         "role": "assistant",
                         "content": run.answer
-                        if visible(user, run)
+                        if visible(user, run, config)
                         else "현재 조회 권한이 없습니다.",
                         "status": {
                             "queued": "streaming",
@@ -246,6 +282,7 @@ def create_app(database: Database | None = None) -> FastAPI:
                     enqueue(
                         db, current, conversation, body.request_id, body.message, body.cloud_allowed
                     ),
+                    config,
                 )
         except Conflict as exc:
             raise HTTPException(409, str(exc)) from None
@@ -255,7 +292,7 @@ def create_app(database: Database | None = None) -> FastAPI:
     @app.get("/v1/runs/{run_id}")
     def status(run_id: str, user: Current) -> dict[str, object]:
         run = owned_run(user, run_id)
-        return user_run_data(user, run)
+        return user_run_data(user, run, config)
 
     @app.post("/v1/runs/{run_id}/cancel")
     def stop(run_id: str, user: Current) -> dict[str, object]:
@@ -265,7 +302,7 @@ def create_app(database: Database | None = None) -> FastAPI:
             if not run:
                 raise HTTPException(404, "not_found")
             cancel(db, run)
-            return user_run_data(user, run)
+            return user_run_data(user, run, config)
 
     @app.post("/v1/requests/{request_id}/cancel", status_code=204)
     def stop_request(request_id: str, user: Current) -> Response:
@@ -326,7 +363,7 @@ def create_app(database: Database | None = None) -> FastAPI:
                     terminal = run.status in TERMINAL
                     for item in batch:
                         data = dict(item.data)
-                        if not visible(current, run):
+                        if not await asyncio.to_thread(visible, current, run, config):
                             data["answer"] = "현재 조회 권한이 없습니다."
                         cursor = item.id
                         payload = json.dumps(data, ensure_ascii=False)

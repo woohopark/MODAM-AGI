@@ -12,9 +12,10 @@ from modam.chat.repository import event, history, purge_conversation
 from modam.config import Settings
 from modam.engine import Engine
 from modam.llm import GroqModel, ModelError
+from modam.mcp_gateway import MCPGateway, resource_access
 from modam.observability import Observer
 from modam.schemas import Request
-from modam.tools import DisconnectedGateway, ToolRegistry
+from modam.tools import ToolRegistry
 
 
 class Worker:
@@ -102,8 +103,15 @@ class Worker:
                     )
                 if mode == "general":
                     return "completed", await model.chat(message), None, []
+                gateway = MCPGateway(self.settings)
                 result = await Engine(
-                    model, DisconnectedGateway(), authority, ToolRegistry(), observer, self.settings
+                    model,
+                    gateway,
+                    authority,
+                    ToolRegistry(),
+                    observer,
+                    self.settings,
+                    evidence_authorizer=gateway.authorize_evidence,
                 ).run(
                     Request(
                         request_id=request_id,
@@ -122,7 +130,23 @@ class Worker:
                     if result.evidence
                     else []
                 )
-                return result.status, result.message, result.error_code, labels
+                labels.extend(
+                    {
+                        "action": "documents.read"
+                        if e.ref.startswith("rag:")
+                        else "inventory.read",
+                        "scope": e.scope,
+                        "service": "rag" if e.ref.startswith("rag:") else "ontology",
+                        "resource_ref": e.ref,
+                    }
+                    for e in result.evidence
+                )
+                answer = result.message
+                if result.evidence:
+                    answer += "\n\n근거: " + "; ".join(
+                        f"{e.ref} (v{e.version}, {e.as_of.isoformat()})" for e in result.evidence
+                    )
+                return result.status, answer, result.error_code, labels
 
         task = asyncio.create_task(generate())
         try:
@@ -153,6 +177,15 @@ class Worker:
                         [],
                     )
                     break
+            if labels and not await asyncio.to_thread(
+                resource_access, self.settings, subject, labels
+            ):
+                outcome, answer, code, labels = (
+                    "denied",
+                    "현재 근거 조회 권한이 없습니다.",
+                    "permission_denied",
+                    [],
+                )
             self.finish(run_id, outcome, answer, code, labels)
         except (ModelError, TimeoutError) as exc:
             self.finish(

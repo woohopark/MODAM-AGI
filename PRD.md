@@ -1,6 +1,6 @@
 # MODAM-AGI 요구사항 정의서
 
-상태: 기반 + CHAT HTTP·인증·PostgreSQL 멀티턴 어댑터 구현; 실제 MCP/승인/ERP는 후속. Chat으로 업무를 정확하고 신속하게 처리하는 공통 업무 에이전트의 오케스트레이션 레이어다. 모델은 Groq만 사용한다. RAG와 온톨로지는 별도 MCP 서버로 호출하며 문서·벡터·그래프 저장소를 직접 소유하거나 조회하지 않는다. 화면은 별도 프로젝트다.
+상태: 기반 + CHAT HTTP·인증·PostgreSQL 멀티턴 어댑터 구현; RAG/ONTOLOGY MCP 조회 연동 구현; 승인/ERP 변경은 후속. Chat으로 업무를 정확하고 신속하게 처리하는 공통 업무 에이전트의 오케스트레이션 레이어다. 모델은 Groq만 사용한다. RAG와 온톨로지는 별도 MCP 서버로 호출하며 문서·벡터·그래프 저장소를 직접 소유하거나 조회하지 않는다. 화면은 별도 프로젝트다.
 
 ## 책임과 범위
 
@@ -49,4 +49,12 @@ C: 출고 이벤트를 업무 도구에서 받는다. 온톨로지 MCP로 창고
 
 ## CHAT 연동 수용 조건 — 2026-10-08 승인
 
-AGI-AUTH-01~03·AGI-CHAT-02를 내부 ID/PW·복수 admin/user Role·정확한 action/scope grant·opaque 세션으로 구현한다. 임의 Role 정의/Role grant 템플릿은 후속이다. 사용자 소유 대화·작업·이벤트를 PostgreSQL에 보관한다. 4,000 code point 신규 메시지, request_id 멱등성, 대화당 활성 실행 하나, 202+SSE, 생성 전/후 취소, 워커 lease 실패 복구를 지원한다. 최근 완료 10턴/20,000 code point 이력; 과거 기업 답변 재전송 금지. 일반 Groq 대화와 기업 업무 조회 모드를 구분한다. 마지막 새 실행 후 30일 보관/사용자 삭제. 기업 도구/ERP 실제 실행은 여전히 미연결이다. 구체적 HTTP 수용 조건과 실행 상태는 [CHAT 계약](docs/CHAT_INTEGRATION.md) 및 STATUS.md를 따른다.
+AGI-AUTH-01~03·AGI-CHAT-02를 내부 ID/PW·복수 admin/user Role·정확한 action/scope grant·opaque 세션으로 구현한다. 임의 Role 정의/Role grant 템플릿은 후속이다. 사용자 소유 대화·작업·이벤트를 PostgreSQL에 보관한다. 4,000 code point 신규 메시지, request_id 멱등성, 대화당 활성 실행 하나, 202+SSE, 생성 전/후 취소, 워커 lease 실패 복구를 지원한다. 최근 완료 10턴/20,000 code point 이력; 과거 기업 답변 재전송 금지. 일반 Groq 대화와 기업 업무 조회 모드를 구분한다. 마지막 새 실행 후 30일 보관/사용자 삭제. RAG/ONTOLOGY 읽기 도구는 실제 MCP로 연결하며 ERP 변경은 미연결이다. 구체적 HTTP 수용 조건과 실행 상태는 [CHAT 계약](docs/CHAT_INTEGRATION.md) 및 STATUS.md를 따른다.
+
+## 독립 지식 서비스 연동 · 2026-10-08
+
+AGI-MCP-01/02와 AGI-AUTH-02/03을 공식 SDK Streamable HTTP, 서비스별 HMAC 위임,
+private 현재 정책 introspection, 서비스 현재 ACL, 답변 전후/대화 재생 시 근거 재검사로 구현한다.
+읽기 RAG/ONTOLOGY만 허용하며 관리/ERP 변경은 모델 도구에 노출하지 않는다.
+합성 데이터 실제 MCP/Groq 검증은 [통합 기록](docs/KNOWLEDGE_INTEGRATION.md)에 기록한다.
+기업 실자료·의미 임베딩·전사 온톨로지·운영 SLA의 완료를 의미하지 않는다.

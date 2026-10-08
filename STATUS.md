@@ -1,5 +1,24 @@
 # MODAM-AGI 구현 상태
 
+2026-10-08 · 현재 v0.4.0. 최신 구현과 검증은 아래 지식 서비스 연결을 따른다.
+
+## 독립 RAG/ONTOLOGY 실제 연결 · v0.4.0
+
+공식 MCP Gateway + 서비스별 짧은 HMAC 위임 + private 현재 권한 introspection을 구현했다.
+도구 스키마는 기존 허용 catalog를 유지한다. 저장된 답변은 현재 scope grant와 원천 근거 ACL/
+버전을 다시 검사하여 회수·삭제·갱신 시 숨긴다. 자료 저장소는 각 서비스가 소유한다.
+답변에는 근거 ref/버전/시점을 표시한다. 관리자 역할에 기업 grant를 자동 추가하지 않았다.
+
+이번 검사: AGI 44개 + 실제 HTTP/MCP 통합 2개, RAG 17개, ONTOLOGY 19개,
+CHAT 74개. Ruff/format/mypy/frozen uv/wheel, CHAT npm run check 통과.
+실제 Compose/Groq 기업 조회 3턴(6메시지), 규정+객체 결합/경로 인용, 서비스 재시작 영속 복원,
+문서 ACL 회수 시 과거 답변 숨김을 검사했다. Chromium 다크/기업 이력·인용 복원도 검사했다.
+후속 제한과 실행 명령은 [지식 서비스 통합](docs/KNOWLEDGE_INTEGRATION.md)을 따른다.
+이 절의 새 MCP 검증은 앞선 미연결 검증 당시와 구분한다. 외부 URL은 아직 없다.
+
+## 이전 v0.3.0 CHAT 구현/검증 기록
+
+
 2026-10-08 · v0.3.0 · 사용자 승인된 MODAM-CHAT 네트워크/멀티턴 구축.
 
 ## 구현된 기능

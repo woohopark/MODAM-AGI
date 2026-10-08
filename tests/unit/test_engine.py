@@ -333,3 +333,35 @@ async def test_conversation_context_is_explicitly_unavailable():
     runner, _ = engine(model=model)
     result = await runner.run(request(conversation_id="past"))
     assert result.status == "not_available" and model.calls == 0
+
+
+async def test_resource_acl_revoked_during_answer_cannot_release_text():
+    allowed = True
+    model = Model()
+
+    async def answer(message, items):
+        nonlocal allowed
+        from modam.schemas import GroundedAnswer
+
+        allowed = False
+        return GroundedAnswer(answer="MUST_NOT_RELEASE", citation_ids=[e.ref for e in items])
+
+    async def resource_check(subject, items):
+        return allowed
+
+    model.answer = answer
+    observer = Observer()
+    runner = Engine(
+        model,
+        Gateway(),
+        Authority(),
+        ToolRegistry(),
+        observer,
+        Settings(),
+        evidence_authorizer=resource_check,
+    )
+    try:
+        result = await runner.run(request())
+        assert result.status == "denied" and "MUST_NOT_RELEASE" not in result.message
+    finally:
+        observer.close()

@@ -1,4 +1,4 @@
-"""Trusted read-tool catalog. Real MCP transport is implemented in a later phase."""
+"""Trusted read-tool catalog; MCP transport and delegation live in mcp_gateway."""
 
 from dataclasses import dataclass
 from typing import Protocol
@@ -40,7 +40,7 @@ class CallContext:
     request_id: str
     run_id: str
     trace_id: str
-    # A transport must resolve current policy and sign delegation; these are not JWT claims.
+    # Gateway signs delegation; services introspect current policy before returning data.
 
 
 class Authority(Protocol):

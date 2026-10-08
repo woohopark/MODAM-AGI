@@ -44,3 +44,10 @@ uv build
 ## 2026-10-08 CHAT 연동 갱신
 
 현재 구현의 기준은 [CHAT 구현 및 배포](docs/CHAT_DEPLOYMENT.md)이다. 이전 첫 기반/정적 데모 단계의 설명과 구분한다.
+
+## 지식 서비스 연결 갱신 · v0.4.0
+
+공식 mcp SDK를 실제 MCP client 용도로 추가하고 uv.lock을 함께 갱신했다.
+새 client·위임·resource ACL은 mcp_gateway.py, 현재 grant endpoint는 chat/api.py,
+Compose 조립은 deployment/compose.knowledge.yaml이다. RAG/graph 의존성을 AGI에 넣지 않았다.
+MCP/업무 계약·테스트·운영 제한은 docs/KNOWLEDGE_INTEGRATION.md를 따른다.

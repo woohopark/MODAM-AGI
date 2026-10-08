@@ -10,7 +10,7 @@ flowchart LR
   Worker[별도 영속 작업 워커] --> DB
   Worker -->|서버 환경변수 키| Groq[Groq]
   Worker --> Engine[기업 조회 엔진 · 현재 ACL]
-  Engine -. 미연결 .-> MCP[RAG / ONTOLOGY MCP]
+  Engine --> MCP[RAG / ONTOLOGY MCP]
 ```
 
 ## HTTP 계약
@@ -46,10 +46,12 @@ BFF `/api`와 AGI `/v1`의 아래 경로는 동일하다. 공개 진입점은 BF
 - HTTP/SSE 단절은 취소가 아니다. 재구독과 상태 조회만 수행하며 새 모델 실행을 만들지 않는다. 명시적 중단은 DB 상태 변경과 워커 task 취소를 모두 수행한다. 이미 Groq에 전송된 요청의 과금/제공자 처리까지 철회한다고 보장하지 않는다.
 - 워커는 DB queued job을 SKIP LOCKED로 claim한다. running은 전체 timeout+30초 lease를 갖는다. 프로세스 장애 후 lease 만료 시 `failed/worker_lost`로 종료하며 결과 불명인 모델 호출은 자동 반복하지 않는다. queued job은 다른 워커가 처리한다.
 - canonical completed turn 최근 10개와 총 20,000 code point 예산을 사용한다. 취소/실패 턴은 제외한다. 일반 대화는 일반 Groq 경로, 기업 조회는 기존 Engine과 현재 Authority를 사용한다. 모호한 지시 대상은 확인 질문으로 처리한다.
-- 기업 답변의 현재 action/scope를 표시/재생할 때 재검사한다. 과거 기업 조회 답변은 새 모델 context에 원문으로 넣지 않으며 현재 데이터 재조회 필요 표식으로 대체한다. 최신 재고/규정을 과거 답변에서 추정하지 않는다.
+- 기업 답변의 현재 action/scope와 인용 근거의 원천 ACL/버전을 표시/재생할 때 재검사한다. 과거 기업 조회 답변은 새 모델 context에 원문으로 넣지 않으며 현재 데이터 재조회 필요 표식으로 대체한다. 최신 재고/규정을 과거 답변에서 추정하지 않는다.
 - Admin Role은 기업 조회 권한을 자동 부여하지 않는다. Role은 admin/user 복수 선택이고 업무 권한은 정확한 action/scope grant 목록이다. 임의 Role 정의/Role별 grant 템플릿은 후속 범위다. 승인/ERP 변경 도구는 아직 미구현이다.
 - 대화는 마지막 새 실행 요청 이후 30일 보관하며 워커가 시간 단위로 정리한다. 사용자 삭제 API/UI를 지원한다. 보관 기간은 Groq 제공자의 데이터 정책을 변경하지 않는다. 실제 MCP 문서·벡터·그래프를 AGI DB에 복제하지 않는다.
 
 ## 검증 경계
 
 SQLite 단위 테스트는 DB 상태·취소·현재 정책·안전한 장애 복구를 재현한다. 운영 DB는 PostgreSQL이다. 실제 PostgreSQL/BFF/FastAPI/별도 워커/Groq의 3턴 및 브라우저 검증은 검증 기록에 따로 기록한다. 실제 MCP/ERP 연결 및 동시 사용자 부하·물리 IME 검증은 완료로 주장하지 않는다.
+
+현재 실제 MCP/Compose/Groq 검증은 [지식 서비스 연동](KNOWLEDGE_INTEGRATION.md)을 따른다. ERP 변경·운영 부하는 후속이다.

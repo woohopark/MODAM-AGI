@@ -24,3 +24,7 @@ AGI foundation 완료와 플랫폼 전체 PoC 완료는 별개다. 세부 결과
 ## 2026-10-08 CHAT 연동 갱신
 
 현재 구현의 기준은 [승인된 CHAT 연동](docs/CHAT_INTEGRATION.md)이다. 이전 첫 기반/정적 데모 단계의 설명과 구분한다.
+
+## 현재 v0.4.0 갱신
+
+독립 RAG/ONTOLOGY 읽기 MCP·서명 위임·현재 근거 ACL·CHAT 연결을 구현했다. 최신 시나리오/검증·후속은 [지식 서비스 통합](docs/KNOWLEDGE_INTEGRATION.md)을 따른다.

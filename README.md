@@ -2,8 +2,8 @@
 
 Groq만 사용하는 업무 오케스트레이션 기반이다. RAG/온톨로지는 독립 MCP 서비스로 연결하며 AGI가 문서·벡터·그래프 저장소를 직접 조회하지 않는다. 화면은 MODAM-CHAT이다.
 
-현재 첫 개발 묶음: 비동기 Groq 어댑터, 한도가 있는 읽기 상태 머신, 주입형 현재 권한/전송 정책, 로컬 구조화 로그·OpenTelemetry 트레이스, 고정 합성 평가 데이터셋.
-내부 ID/PW 인증·FastAPI HTTP·PostgreSQL 대화/작업/SSE·일반 Groq 멀티턴과 MODAM-CHAT Fastify 중계를 추가했다. 승인 실행·실제 MCP 연결은 후속이다. 외부 운영 주소는 아직 없고 workspace 내부 서비스만 실행한다.
+현재 v0.4.0 기반: 비동기 Groq 어댑터, 한도가 있는 읽기 상태 머신, 주입형 현재 권한/전송 정책, 로컬 구조화 로그·OpenTelemetry 트레이스, 고정 합성 평가 데이터셋.
+내부 ID/PW 인증·FastAPI HTTP·PostgreSQL 대화/작업/SSE·일반 Groq 멀티턴과 MODAM-CHAT Fastify 중계를 추가했다. RAG/ONTOLOGY 읽기 MCP를 실제 연결했으며 승인/ERP 변경 실행은 후속이다. 외부 운영 주소는 아직 없고 workspace 내부 서비스만 실행한다.
 
 [CHAT 연동 계약](docs/CHAT_INTEGRATION.md) · [Docker/실행/주소](docs/CHAT_DEPLOYMENT.md).
 
@@ -40,3 +40,5 @@ groq는 환경변수 GROQ_API_KEY를 사용해 합성 질문의 계획만 실제
 이전 단일 서비스는 [문서 이력](docs/legacy/INDEX.md)과 Git 기준점에 보존했다. 이전 44+8 테스트를 신규 구조 통과로 집계하지 않는다.
 
 현재 환경에서는 `.local/with-groq uv run modam-evaluate --mode groq`로 로컬 보안 설정을 실행 환경변수에 주입한다. 로컬 키 파일/주입기는 Git 제외다. 현재 검증 모델은 Groq 제공 `openai/gpt-oss-120b`이며 실제 계획 7/7·합성 근거 답변 계약 1/1을 확인했다. 상세 범위는 [검토 기록](docs/FOUNDATION_REVIEW.md)을 따른다.
+
+현재 독립 지식 MCP 구현/검증은 [지식 서비스 통합](docs/KNOWLEDGE_INTEGRATION.md)을 따른다.

@@ -18,8 +18,10 @@ description: Groq와 허용된 MCP 도구로 업무 목표를 계획·수행·�
 
 ## 개발 적용
 
-개발 지침은 AGENTS.md, 승인 기술은 DEVELOPMENT.md, 단계 범위는 IMPLEMENTATION_PLAN.md를 따른다. 현재 채팅 어댑터는 내부 인증·PostgreSQL·HTTP·일반 Groq 멀티턴을 지원한다. 실제 MCP/승인 저장소는 미연결 상태를 명시한다. 새 행동은 실패 테스트부터 작성하고 검증 결과와 실제 연결 미완료를 STATUS.md에 갱신한다.
+개발 지침은 AGENTS.md, 승인 기술은 DEVELOPMENT.md, 단계 범위는 IMPLEMENTATION_PLAN.md를 따른다. 현재 채팅 어댑터는 내부 인증·PostgreSQL·HTTP·일반 Groq 멀티턴을 지원한다. RAG/ONTOLOGY 읽기 MCP는 실제 연결하고 승인 저장소/변경 도구 미연결을 명시한다. 새 행동은 실패 테스트부터 작성하고 검증 결과와 실제 연결 미완료를 STATUS.md에 갱신한다.
 
 ## CHAT 연동 기준 — 2026-10-08 승인
 
 [CHAT 계약](docs/CHAT_INTEGRATION.md), [실행/배포](docs/CHAT_DEPLOYMENT.md)를 따른다. 인증·DB 상태는 chat/에서 담당하고 업무 Engine에 로그인/HTTP 분기를 넣지 않는다. 대화 원문은 모델 답변을 위한 사용자별 DB 상태이며 로그/관측 원문이 아니다. 현재 ACL을 조회·재생·새 실행마다 확인한다. 최근 완료 턴만 사용하고 과거 기업 답변을 최신 근거로 재사용하지 않는다. UI 다크 모드는 CHAT 책임이다. 실제 통신·대역·외부 배포 상태를 각각 기록한다.
+
+현재 독립 지식 MCP 구현/검증은 [지식 서비스 통합](docs/KNOWLEDGE_INTEGRATION.md)을 따른다.
