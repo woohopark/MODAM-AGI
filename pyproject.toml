@@ -1,16 +1,25 @@
 [project]
 name = "modam-agi"
-version = "0.2.0"
-description = "Groq-only orchestration foundation for independent MCP services"
+version = "0.3.0"
+description = "Groq orchestration with authenticated persistent chat and independent MCP boundaries"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "pydantic>=2.10,<3",
   "pydantic-settings>=2.7,<3",
   "httpx>=0.28,<1",
   "opentelemetry-sdk>=1.30,<2",
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "sqlalchemy>=2.0,<3",
+  "alembic>=1.14,<2",
+  "psycopg[binary]>=3.2,<4",
+  "argon2-cffi>=23,<26",
 ]
 
 [project.scripts]
+modam-api = "modam.chat.cli:api"
+modam-worker = "modam.chat.worker:main"
+modam-create-user = "modam.chat.cli:bootstrap"
 modam-evaluate = "modam.evaluation:main"
 
 [dependency-groups]

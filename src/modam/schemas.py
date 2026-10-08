@@ -101,6 +101,7 @@ class GroundedAnswer(Contract):
 
 
 class RunResult(Contract):
+    grants_used: list[Grant] = Field(default_factory=list)
     request_id: str
     run_id: str
     trace_id: str

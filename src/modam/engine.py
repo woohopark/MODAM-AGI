@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from modam.config import Settings
 from modam.llm import Model, ModelError
 from modam.observability import ObservationError, Observer
-from modam.schemas import Evidence, Request, RunResult, Status, ToolCall, ToolResult
+from modam.schemas import Evidence, Grant, Request, RunResult, Status, ToolCall, ToolResult
 from modam.tools import Authority, CallContext, Gateway, ToolError, ToolRegistry
 
 
@@ -234,6 +234,7 @@ class Engine:
             "not_available": "필요한 업무 도구가 준비되지 않았습니다.",
         }
         return RunResult(
+            grants_used=[Grant(action=a, scopes=[s]) for a, s in state.grants_used],
             request_id=state.request.request_id,
             run_id=state.run_id,
             trace_id=state.trace_id,

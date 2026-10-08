@@ -1,33 +1,35 @@
 # MODAM-AGI 구현 상태
 
-2026-10-08. 사용자 구현 검토 승인 후 첫 개발 묶음(계약·Groq 정리·실행/관측/평가 기반)을 구현했다.
+2026-10-08 · v0.3.0 · 사용자 승인된 MODAM-CHAT 네트워크/멀티턴 구축.
 
-## 구현
+## 구현된 기능
 
-- Groq-only 비동기 HTTPX 어댑터, Pydantic 계획/답변 검증, 오류 안전 코드, 실제 시도 수/제공 usage.
-- 현재 신원/권한/전송 정책을 주입하는 읽기 상태 머신. 전체/도구 시간 제한, 모델/도구 호출 한도, 제한된 재계획.
-- 허용 도구/인자, 반환 근거 범위·현재 정책·freshness·출처 버전·전송 허용·인용 ID 검증.
-- 로컬 JSON 로그와 OpenTelemetry span. 요청부터 단계까지 trace/run 연결, 원문/키/예외 원문 제외.
-- 버전 고정 합성 14개 평가, 워밍업/반복, 실패 구분, 전체/단계 p50/p95 보고.
-- uv.lock, Ruff/mypy/pytest, wheel/sdist 패키징, GitHub Actions 검사 정의.
-- 이전 단일 서비스 소스·관련 의존성·테스트·마이그레이션 정리. 이전 기준점/Git 이력/문서 보존. DB/볼륨에는 접근하지 않았다.
+- 기존 Groq-only 기업 읽기 Engine, 현재 신원/권한/Cloud 정책, 제한된 계획/도구/근거 검증·관측·14개 고정 평가 유지.
+- FastAPI 인증/세션/소유 대화/실행/취소/SSE/삭제 API; Argon2id PW, opaque session digest, admin/user 복수 Role와 정확한 action/scope grant 관리.
+- PostgreSQL + SQLAlchemy + immutable Alembic migration. 영속 대화·작업·이벤트·생성 전 취소. 사용자별 request_id 멱등성과 대화당 활성 실행 unique index.
+- 별도 worker와 SKIP LOCKED claim/lease. 단절은 실행 유지, 명시적 취소는 task 중단, 장애 후 만료 실행은 worker_lost로 종료하여 자동 모델 중복 호출 방지.
+- 일반 Groq 대화/기업 조회 분리. canonical 완료 10턴/20,000 code point, 실패/취소 제외, 과거 기업 답변 원문 재전송 금지·표시 시 현재 grant 재검사.
+- MODAM-CHAT Fastify BFF와 실제 브라우저 연동. HttpOnly/SameSite cookie, production Secure/HTTPS origin 검사, 로그인 rate limit, typed provider events와 복원/삭제 repository.
+- Docker Compose: private PostgreSQL/API/worker, BFF loopback 3300. 키는 worker env에만 주입. 데이터를 보존하는 DB volume.
 
 ## 이번 검증
 
-- Ruff lint/format, mypy strict 통과.
-- 단위/계약 테스트 최초 29개, Groq 설정 보완 후 30개 통과.
-- 합성 경계 평가 14개 × 측정 3회 = 42개 통과(별도 워밍업 1회).
-- wheel/sdist 빌드 및 wheel의 신규 코드/데이터셋 포함 확인.
-- 최초 실제 Groq 평가는 키 미주입으로 blocked였다. 이후 사용자 제공 키를 로컬 보안 설정에서 환경변수로 주입했다.
-- 기존 모델은 현재 계정 목록에서 없어 HTTP 404였다. 제공되는 openai/gpt-oss-120b로 변경했다(Groq API 사용).
-- 프롬프트 v2에서 실제 Groq 계획 7/7, 합성 근거 답변 계약 1/1 통과. 실제 MCP는 여전히 미연결이다.
-- 실제 MCP/DB/HTTP/승인/ERP: 이번 묶음에서 미구현·미실행.
+- AGI Ruff lint/format·mypy strict·36개 pytest 통과, uv sync --frozen 및 v0.3.0 wheel/sdist 빌드.
+- 합성 경계 평가 14개 × 3회 = 42개 통과, 별도 워밍업 1회. 실제 LLM 성능/실제 MCP 통과로 집계하지 않는다.
+- CHAT 포맷/린트/strict/73개 테스트/클라이언트·BFF 빌드 통과. 핵심 경계+BFF coverage statements 95.89%, branches 95.04%, functions 90%, lines 96.85%. npm audit --omit=dev 취약점 0건(실행 시점).
+- 실제 native PostgreSQL + BFF + API + 별도 worker + Groq 3턴, 6메시지 복원·SSE·중복 ID 재전송·HttpOnly 확인.
+- 실제 Docker 전 스택 Groq 3턴 통과. BFF/API/worker 프로세스 재시작 후 session/history 유지와 다음 턴 context 통과. 생성 전/후 취소·현재 소유권·다른 사용자 404·일반 사용자 admin 403 확인.
+- 실제 기업 Groq 계획 + 현재 logistics documents.read grant 검사 후 MCP 미연결이 not_available/tool_not_connected로 반환되는 것을 확인.
+- Chromium 실제 HTTP 로그인·2턴 Groq·새로고침 복원·다크 CSS·모바일 sidebar·합성 composition event 확인. 물리 키보드 IME·200% 확대·전체 색상 대비 검사는 별도 미검증.
 
-CI 파일은 작성했으며 원격 Actions 실행 성공을 주장하지 않는다. 상세 증거는 docs/FOUNDATION_REVIEW.md와 .local/reports(로컬, Git 제외)에 있다.
+실제 검증 보고서는 Git 제외 .local/reports에 있다. 테스트 대역 결과와 실제 Groq/PostgreSQL/브라우저 결과를 구분한다. 상세 [CHAT 계약](docs/CHAT_INTEGRATION.md) / [실행·배포](docs/CHAT_DEPLOYMENT.md).
 
-## 후속
+## 실행/외부 배포
 
-내부 ID/PW 인증·복수 Role 관리, FastAPI, PostgreSQL 실행/대화/승인 저장, 사용자별 요청 멱등성·재시작 복구 → 실제 두 MCP·위임/현재 ACL·연결 계약 → 별도 알림/발주 초안 도구·전체 변경 흐름.
-현재 Engine은 내부 라이브러리이며 HTTP 진입점/로그인/영속 감사/배포 서비스가 없다. 대화 ID를 보내면 not_available이며 이력을 처리했다고 주장하지 않는다. 첫 묶음 통과는 전체 PRD 또는 범용 AGI 완성을 의미하지 않는다.
+workspace 내부 native BFF http://127.0.0.1:3000, Docker BFF http://127.0.0.1:3300. 사용자 PC의 localhost가 아니므로 외부 공개 주소로 안내하지 않는다. 기존 Sites 주소는 소유자 제한 정적 데모로 유지한다. 현재 운영 서버 자격증명·도메인·포트 공개 연결이 없어 외부 실제 AGI URL은 미발급이다.
 
-이전 44+8 테스트/오프라인 평가 기록은 docs/legacy에 보존하며 신규 통과로 집계하지 않는다.
+## 후속 및 제한
+
+실제 RAG/ONTOLOGY MCP·서명 위임·승인/알림/ERP 변경 도구, 임의 Role 정의/Role grant 템플릿, 운영 DB 백업/암호화·동시 부하·SLO·외부 운영 배포는 후속이다. Admin은 기업 실행 grant를 자동 상속하지 않는다. 전체 PRD/범용 AGI 완성을 주장하지 않는다.
+
+이전 foundation 검증과 기준점은 docs/FOUNDATION_REVIEW.md, docs/legacy와 baseline-monolith-cadea94 Git tag에 보존한다. 신규 chat DB/volume만 생성했으며 기존 DB/volume은 삭제하지 않았다.

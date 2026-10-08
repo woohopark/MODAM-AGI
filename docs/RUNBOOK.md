@@ -30,3 +30,7 @@ Groq 키는 환경의 GROQ_API_KEY로 주입한다. MODEM이 아닌 MODAM_GROQ_M
 ```
 
 검증된 현재 모델은 openai/gpt-oss-120b이며 호출 제공자는 Groq다. 환경변수 MODAM_GROQ_MODEL로 교체 가능하다. 기존 llama-3.3-70b-versatile은 현재 제공 목록에 없으며 model_not_found로 구분한다. 프로세스 종료 시 실행 환경변수는 사라지고 로컬 설정 파일은 유지된다.
+
+## 2026-10-08 CHAT 연동 갱신
+
+현재 구현의 기준은 [CHAT 실행/재시작/계정/DB](CHAT_DEPLOYMENT.md)이다. 이전 첫 기반/정적 데모 단계의 설명과 구분한다.

@@ -3,7 +3,9 @@
 Groq만 사용하는 업무 오케스트레이션 기반이다. RAG/온톨로지는 독립 MCP 서비스로 연결하며 AGI가 문서·벡터·그래프 저장소를 직접 조회하지 않는다. 화면은 MODAM-CHAT이다.
 
 현재 첫 개발 묶음: 비동기 Groq 어댑터, 한도가 있는 읽기 상태 머신, 주입형 현재 권한/전송 정책, 로컬 구조화 로그·OpenTelemetry 트레이스, 고정 합성 평가 데이터셋.
-로그인·HTTP 서비스·PostgreSQL 영속 상태·승인 실행·실제 MCP 연결은 후속 단계다. 지금 배포된 AGI 서비스 주소는 없다.
+내부 ID/PW 인증·FastAPI HTTP·PostgreSQL 대화/작업/SSE·일반 Groq 멀티턴과 MODAM-CHAT Fastify 중계를 추가했다. 승인 실행·실제 MCP 연결은 후속이다. 외부 운영 주소는 아직 없고 workspace 내부 서비스만 실행한다.
+
+[CHAT 연동 계약](docs/CHAT_INTEGRATION.md) · [Docker/실행/주소](docs/CHAT_DEPLOYMENT.md).
 
 ## 실행 및 검증
 

@@ -20,3 +20,7 @@ DB/볼륨/사용자 데이터 삭제·중지·마이그레이션은 이번 묶�
 
 실제 Groq 키가 없으면 blocked로 기록한다. MCP 미연결을 완료로 처리하지 않는다.
 AGI foundation 완료와 플랫폼 전체 PoC 완료는 별개다. 세부 결과는 STATUS.md와 docs/FOUNDATION_REVIEW.md를 따른다.
+
+## 2026-10-08 CHAT 연동 갱신
+
+현재 구현의 기준은 [승인된 CHAT 연동](docs/CHAT_INTEGRATION.md)이다. 이전 첫 기반/정적 데모 단계의 설명과 구분한다.

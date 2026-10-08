@@ -39,3 +39,7 @@ flowchart TD
 - 로그 저장 실패는 completed를 반환하지 않는다. 현재 로그/트레이스는 프로세스 메모리 및 선택 JSON stream으로 영속 감사 저장소가 아니다.
 
 다음 단계: 내부 인증·PostgreSQL 실행/승인 상태·FastAPI, 이후 실제 MCP 위임·ACL·서비스 통합.
+
+## 2026-10-08 CHAT 연동 갱신
+
+현재 구현의 기준은 [CHAT HTTP/DB/worker 구조](docs/CHAT_INTEGRATION.md)이다. 이전 첫 기반/정적 데모 단계의 설명과 구분한다.
