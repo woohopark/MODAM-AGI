@@ -9,9 +9,10 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from modam.agent import interpret_and_authorize
+from modam.business import run_tool, snapshot_parameters
 from modam.config import Settings
 from modam.db import make_engine, session_factory
-from modam.llm import GroqInterpreter, Interpreter, ModelError
+from modam.llm import GroqInterpreter, Interpreter, ModelError, model_calls, reset_model_calls
 from modam.models import Approval, Audit, ChatRun, Conversation, Role, User, now
 from modam.schemas import (
     ApprovalCreate,
@@ -19,6 +20,7 @@ from modam.schemas import (
     AuditView,
     ChatRequest,
     ChatResponse,
+    ChatStatus,
     Decision,
     Grant,
     Intent,
@@ -34,6 +36,7 @@ from modam.schemas import (
 from modam.security import (
     allowed,
     audit,
+    has_action,
     hash_password,
     issue_session,
     session_user,
@@ -237,7 +240,13 @@ def create_app(
             if (
                 row.action != payload.action
                 or row.scope != payload.scope
-                or row.parameters != payload.parameters.model_dump()
+                or {k: v for k, v in row.parameters.items() if k != "expected_revision"}
+                != payload.parameters.model_dump(exclude={"expected_revision"})
+                or (
+                    payload.parameters.expected_revision is not None
+                    and row.parameters.get("expected_revision")
+                    != payload.parameters.expected_revision
+                )
             ):
                 raise HTTPException(409, "idempotency_conflict")
             return approval_view(row)
@@ -250,7 +259,7 @@ def create_app(
             request_key=payload.request_key,
             action=payload.action,
             scope=payload.scope,
-            parameters=payload.parameters.model_dump(),
+            parameters=snapshot_parameters(db, payload.scope, payload.parameters.model_dump()),
         )
         db.add(row)
         try:
@@ -337,7 +346,8 @@ def create_app(
 
     @app.post("/v1/chat", response_model=ChatResponse)
     def chat(payload: ChatRequest, db: DB, user: CurrentUser) -> ChatResponse:
-        if not payload.cloud_allowed:
+        interpreter_instance = cast(Interpreter, app.state.interpreter)
+        if interpreter_instance.provider != "recorded-fixture" and not payload.cloud_allowed:
             audit(db, user, "chat.cloud", "denied", request_id=payload.request_id)
             db.commit()
             raise HTTPException(403, "cloud_transmission_not_allowed")
@@ -356,10 +366,16 @@ def create_app(
             result = ChatResponse.model_validate(previous.response)
             # Do not release historic parsed targets after permission revocation.
             if result.intent and result.intent.action != "unsupported":
-                if not allowed(user, result.intent.action, result.intent.scope):
+                if not (
+                    allowed(user, result.intent.action, result.intent.scope)
+                    if result.intent.scope is not None
+                    else has_action(user, result.intent.action)
+                ):
                     result.status = "denied"
                     result.message = "현재 해당 업무 대상에 접근할 권한이 없습니다."
                     result.intent = None
+                    result.data = {}
+                    result.evidence = []
             return result
         if payload.conversation_id:
             conversation = db.get(Conversation, payload.conversation_id)
@@ -401,31 +417,60 @@ def create_app(
                 raise ModelError("user_unavailable")
             return current
 
+        reset_model_calls()
         try:
             state = interpret_and_authorize(
-                interpreter_instance, reload_user, payload.message, history
+                interpreter_instance,
+                reload_user,
+                payload.message,
+                history,
+                lambda intent: run_tool(
+                    db,
+                    reload_user(),
+                    interpreter_instance,
+                    intent,
+                    payload.message,
+                    payload.request_id,
+                ),
             )
             result = ChatResponse(
                 request_id=payload.request_id,
                 conversation_id=conversation.id,
-                status=state["status"],
+                status=cast(ChatStatus, state["status"]),
                 message=state["reply"],
                 intent=Intent.model_validate(state["intent"]),
                 provider=interpreter_instance.provider,
                 model=interpreter_instance.model,
+                data=state.get("data", {}),
+                evidence=state.get("evidence", []),
+                timings_ms=state.get("timings_ms", {}),
             )
+            if result.intent and result.intent.action != "unsupported":
+                current = reload_user()
+                if not (
+                    allowed(current, result.intent.action, result.intent.scope)
+                    if result.intent.scope is not None
+                    else has_action(current, result.intent.action)
+                ):
+                    result.status = "denied"
+                    result.message = "현재 해당 업무 대상에 접근할 권한이 없습니다."
             if result.status == "denied":
                 result.intent = None
-        except ModelError as exc:
+                result.data = {}
+                result.evidence = []
+        except (ModelError, HTTPException) as exc:
+            db.rollback()
+            code = exc.code if isinstance(exc, ModelError) else str(exc.detail)
             result = ChatResponse(
                 request_id=payload.request_id,
                 conversation_id=conversation.id,
                 status="failed",
                 message="모델 요청을 처리하지 못했습니다. 업무는 실행하지 않았습니다.",
-                error_code=exc.code,
+                error_code=code,
                 provider=interpreter_instance.provider,
                 model=interpreter_instance.model,
             )
+        result.model_calls = model_calls()
         row.status = result.status
         row.response = result.model_dump(mode="json")
         audit(
@@ -439,11 +484,16 @@ def create_app(
                 "action": result.intent.action if result.intent else None,
                 "error_code": result.error_code,
                 "elapsed_ms": round((time.monotonic() - started) * 1000),
-                "steps": ["interpret", "authorize"],
+                "steps": ["interpret", "authorize", "tools"],
+                "timings_ms": result.timings_ms,
+                "model_calls": result.model_calls,
             },
             payload.request_id,
         )
         db.commit()
         return result
 
+    from modam.business_api import router
+
+    app.include_router(router)
     return app

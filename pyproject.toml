@@ -25,6 +25,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/modam"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"samples/warehouse_poc.json" = "modam/data/warehouse_poc.json"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["postgres: requires MODAM_TEST_DATABASE_URL pointing at an isolated test database"]

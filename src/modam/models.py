@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -92,3 +94,108 @@ class ChatRun(Base):
     status: Mapped[str] = mapped_column(String(30), default="processing")
     response: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class DatasetSeed(Base):
+    __tablename__ = "dataset_seeds"
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Ontology(Base):
+    __tablename__ = "ontologies"
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    version: Mapped[int]
+    definition: Mapped[dict[str, Any]] = mapped_column(JSON)
+
+
+class GraphNode(Base):
+    __tablename__ = "graph_nodes"
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    ontology_id: Mapped[str] = mapped_column(ForeignKey("ontologies.id"))
+    kind: Mapped[str] = mapped_column(String(100))
+    scope: Mapped[str] = mapped_column(String(100), index=True)
+    attributes: Mapped[dict[str, Any]] = mapped_column(JSON)
+    source: Mapped[str] = mapped_column(String(300))
+
+
+class GraphEdge(Base):
+    __tablename__ = "graph_edges"
+    __table_args__ = (UniqueConstraint("source_id", "target_id", "kind"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    source_id: Mapped[str] = mapped_column(ForeignKey("graph_nodes.id"))
+    target_id: Mapped[str] = mapped_column(ForeignKey("graph_nodes.id"))
+    kind: Mapped[str] = mapped_column(String(100))
+
+
+class Stock(Base):
+    __tablename__ = "stocks"
+    __table_args__ = (UniqueConstraint("scope", "item_id"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    scope: Mapped[str] = mapped_column(String(100), index=True)
+    item_id: Mapped[str] = mapped_column(String(100))
+    quantity: Mapped[int]
+    pending_quantity: Mapped[int] = mapped_column(default=0)
+    unit: Mapped[str] = mapped_column(String(30))
+    revision: Mapped[int] = mapped_column(default=1)
+    inventory_node_id: Mapped[str] = mapped_column(ForeignKey("graph_nodes.id"))
+    rule_node_id: Mapped[str] = mapped_column(ForeignKey("graph_nodes.id"))
+
+
+class InventoryEvent(Base):
+    __tablename__ = "inventory_events"
+    event_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    scope: Mapped[str] = mapped_column(String(100))
+    item_id: Mapped[str] = mapped_column(String(100))
+    quantity: Mapped[int]
+    result: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    __table_args__ = (UniqueConstraint("user_id", "event_id"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    event_id: Mapped[str] = mapped_column(ForeignKey("inventory_events.event_id"))
+    scope: Mapped[str] = mapped_column(String(100))
+    details: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class PurchaseDraft(Base):
+    __tablename__ = "purchase_drafts"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    approval_id: Mapped[str] = mapped_column(ForeignKey("approvals.id"), unique=True)
+    scope: Mapped[str] = mapped_column(String(100), index=True)
+    item_id: Mapped[str] = mapped_column(String(100))
+    quantity: Mapped[int]
+    unit: Mapped[str] = mapped_column(String(30))
+    source_revision: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Document(Base):
+    __tablename__ = "documents"
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    scope: Mapped[str] = mapped_column(String(100), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    cloud_allowed: Mapped[bool] = mapped_column(Boolean, default=False)
+    location: Mapped[str] = mapped_column(String(200))
+    version: Mapped[int]
+    facts: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    chunks: Mapped[list[DocumentChunk]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+    id: Mapped[str] = mapped_column(String(150), primary_key=True)
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"))
+    position: Mapped[int]
+    content: Mapped[str] = mapped_column(String(1000))
+    search_hits: Mapped[int] = mapped_column(default=0)
+    context_hits: Mapped[int] = mapped_column(default=0)
+    citations: Mapped[int] = mapped_column(default=0)

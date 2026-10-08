@@ -71,3 +71,29 @@ def test_timeout_preserves_no_sensitive_remote_details():
 
     with pytest.raises(ModelError, match="model_timeout"):
         GroqInterpreter(settings(), httpx.MockTransport(reply)).interpret("hello", [])
+
+
+def test_model_call_count_and_grounded_answer_contract():
+    import json
+
+    from modam.llm import model_calls, reset_model_calls
+
+    def reply(request):
+        payload = json.loads(request.content)
+        assert payload["response_format"] == {"type": "json_object"}
+        assert "chunk_id" in payload["messages"][0]["content"]
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"content": '{"answer":"근거 답변","citation_ids":["doc:0"]}'}}
+                ]
+            },
+        )
+
+    reset_model_calls()
+    answer = GroqInterpreter(settings(), httpx.MockTransport(reply)).answer(
+        "규정 질문", [{"chunk_id": "doc:0", "text": "근거"}]
+    )
+    assert answer.citation_ids == ["doc:0"]
+    assert model_calls() == 1

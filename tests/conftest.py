@@ -11,7 +11,7 @@ from modam.config import Settings
 from modam.db import make_engine, session_factory
 from modam.llm import ModelError
 from modam.models import Base
-from modam.schemas import Intent
+from modam.schemas import GroundedAnswer, Intent
 from modam.security import bootstrap_admin
 
 PASSWORD = "test-only-long-password"
@@ -33,6 +33,12 @@ class FakeInterpreter:
         if self.error:
             raise ModelError(self.error)
         return self.intent
+
+    def answer(self, question, contexts):
+        return GroundedAnswer(
+            answer="\n".join(row["text"] for row in contexts),
+            citation_ids=[row["chunk_id"] for row in contexts],
+        )
 
 
 @dataclass

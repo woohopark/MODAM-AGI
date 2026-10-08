@@ -38,3 +38,17 @@
 승인 중복방지 키는 사용자별 유일하며 내용이 같으면 기존 결과, 다르면 409다. Chat request_id는 사용자별 유일하며 동시 중복은 재호출하지 않는다. 모델 실패 후 재시도 정책은 명시하고 기존 실패를 완료로 반환하지 않는다.
 
 현재 첫 개발 묶음 API는 구현되었습니다. 세부 필드·응답 스키마는 서버의 `/openapi.json`으로 확인합니다. Chat의 모델 오류는 HTTP 200과 `status=failed`, 안전한 `error_code`로 응답하며 HTTP 요청 오류와 업무 결과를 구분합니다. 동일 실패 request_id는 재호출하지 않으므로 설정 수정 후에는 새 request_id를 사용합니다. 첫 묶음에서 처리 중 프로세스가 중단된 요청은 자동 재실행하지 않고 409로 남습니다. 실행 복구와 실제 도구 연결은 후속 단계에서 구현합니다.
+
+## 샘플 업무 흐름 확장
+
+- POST /v1/inventory/events: inventory.record 권한, event_id/scope/item_id/quantity/confirmed=true. 중복 이벤트는 원래 결과를 반환하며 다른 내용은 409.
+- GET /v1/inventory/{scope}/{item_id}: inventory.read 권한, 현재 수량·미입고·revision·규칙·추천 수량.
+- GET /v1/graph?scope=...&start=...&depth=3: inventory.read 권한, 허용 범위의 방향 그래프, 깊이 최대 5.
+- POST/GET /v1/admin/ontologies: Admin, 불변 버전 정의와 관계 endpoint 검증.
+- POST /v1/admin/documents: Admin, text·원문 위치·버전·scope·facts·cloud_allowed. 같은 ID의 다른 내용은 409.
+- GET /v1/admin/documents/metrics: Admin, 검색/컨텍스트/인용 별도 집계.
+- GET /v1/notifications: 사용자 자신의 현재 허용 범위 알림.
+- POST /v1/approvals/{id}/execute: procurement.execute 권한, 승인자/요청자 현재 권한 및 source revision 재검증, 초안 하나만 생성.
+- GET /v1/purchase-drafts: 발주 제안 또는 실행 권한 범위의 초안.
+
+Chat 상태에 completed/awaiting_approval과 data/evidence/timings_ms/model_calls를 추가했다. 읽기 답변 완료와 승인 대기, 실제 ERP 등록을 구분한다. 현재 연결된 재고·문서·발주 도구에만 실행하고 없는 데이터는 명시적으로 안내한다. 응답의 model_calls는 실제 Groq 요청 시도 수이며 offline은 0이다. Cloud 전송 허용은 Groq 경로에서 필요하고 유한한 recorded-fixture 모드에는 외부 호출이 없다.

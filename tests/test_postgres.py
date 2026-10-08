@@ -135,3 +135,153 @@ def test_concurrent_decisions_produce_one_audit(postgres_harness):
     with session_factory(h.engine)() as db:
         events = list(db.scalars(select(Audit).where(Audit.event == "approval.decision")))
         assert sum(event.details["approval_id"] == row["id"] for event in events) == 1
+
+
+@pytest.mark.postgres
+def test_complete_scenario_with_real_postgresql(postgres_harness):
+    from modam.evaluation import run_scenario
+    from modam.sample import RecordedInterpreter, seed_sample
+
+    h = postgres_harness
+    with session_factory(h.engine)() as db:
+        credentials = seed_sample(db)
+    h.client.app.state.interpreter = RecordedInterpreter()
+    result = run_scenario(h.client, credentials, "offline")
+    assert result["passed"], result.get("failed_check")
+    assert result["rag_correct"] == 7
+    # Retain scoped headers for concurrency checks without dumping passwords/tokens.
+    h.client.app.state.sample_headers = {}
+    for username, password in credentials.items():
+        token = h.client.post(
+            "/v1/auth/login", json={"username": username, "password": password}
+        ).json()["token"]
+        h.client.app.state.sample_headers[username] = {"Authorization": "Bearer " + token}
+
+
+@pytest.mark.postgres
+def test_same_inventory_event_in_parallel_decrements_once(postgres_harness):
+    h = postgres_harness
+    headers = h.client.app.state.sample_headers["sample_field"]
+    event = {
+        "event_id": "parallel-stock-event",
+        "scope": "B",
+        "item_id": "C",
+        "quantity": 1,
+        "confirmed": True,
+    }
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        responses = list(
+            workers.map(
+                lambda _: h.client.post("/v1/inventory/events", json=event, headers=headers),
+                range(2),
+            )
+        )
+    assert all(response.status_code == 200 for response in responses)
+    assert responses[0].json() == responses[1].json()
+    assert h.client.get("/v1/inventory/B/C", headers=headers).json()["quantity"] == 7
+
+
+@pytest.mark.postgres
+def test_parallel_draft_execution_adds_one_draft(postgres_harness):
+    h = postgres_harness
+    field = h.client.app.state.sample_headers["sample_field"]
+    manager = h.client.app.state.sample_headers["sample_inventory"]
+    row = h.approval(field, key="parallel-draft").json()
+    assert (
+        h.client.post(
+            f"/v1/approvals/{row['id']}/decision", json={"decision": "approved"}, headers=manager
+        ).status_code
+        == 200
+    )
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        responses = list(
+            workers.map(
+                lambda _: h.client.post(f"/v1/approvals/{row['id']}/execute", headers=manager),
+                range(2),
+            )
+        )
+    assert all(response.status_code == 200 for response in responses)
+    assert len({response.json()["id"] for response in responses}) == 1
+
+
+@pytest.mark.postgres
+def test_parallel_full_outbound_event_is_idempotent_even_at_low_stock(
+    postgres_harness, monkeypatch
+):
+    from threading import Barrier
+
+    import modam.business as business
+    from modam.knowledge import add_edge
+    from modam.models import GraphNode, Stock
+
+    h = postgres_harness
+    with session_factory(h.engine)() as db:
+        db.add_all(
+            [
+                GraphNode(
+                    id="inventory:race:C",
+                    ontology_id="warehouse-v1",
+                    kind="Inventory",
+                    scope="race",
+                    attributes={"quantity": 108},
+                    source="synthetic:race",
+                ),
+                GraphNode(
+                    id="rule:race:C",
+                    ontology_id="warehouse-v1",
+                    kind="ProcurementRule",
+                    scope="race",
+                    attributes={"threshold": 10, "target": 50},
+                    source="synthetic:race",
+                ),
+            ]
+        )
+        db.flush()
+        add_edge(db, "inventory:race:C", "rule:race:C", "triggers")
+        db.add(
+            Stock(
+                scope="race",
+                item_id="C",
+                quantity=108,
+                pending_quantity=0,
+                unit="개",
+                revision=1,
+                inventory_node_id="inventory:race:C",
+                rule_node_id="rule:race:C",
+            )
+        )
+        db.commit()
+    role = h.role(
+        "race-recorder",
+        [
+            {"action": "inventory.record", "scopes": ["race"]},
+            {"action": "inventory.read", "scopes": ["race"]},
+        ],
+    )
+    _, headers = h.user("race-recorder", [role])
+    original = business.find_stock
+    barrier = Barrier(2)
+
+    def synchronized_find(db, scope, item, lock=False):
+        if lock and scope == "race":
+            barrier.wait(timeout=5)
+        return original(db, scope, item, lock)
+
+    monkeypatch.setattr(business, "find_stock", synchronized_find)
+    event = {
+        "event_id": "race-full-outbound",
+        "scope": "race",
+        "item_id": "C",
+        "quantity": 100,
+        "confirmed": True,
+    }
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        responses = list(
+            workers.map(
+                lambda _: h.client.post("/v1/inventory/events", json=event, headers=headers),
+                range(2),
+            )
+        )
+    assert all(r.status_code == 200 for r in responses)
+    assert responses[0].json() == responses[1].json()
+    assert h.client.get("/v1/inventory/race/C", headers=headers).json()["quantity"] == 8

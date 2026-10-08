@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 Action = Literal[
     "admin.manage",
     "inventory.read",
+    "inventory.record",
     "procurement.propose",
     "procurement.approve",
     "procurement.execute",
@@ -79,6 +80,7 @@ class ProcurementParameters(Contract):
     item_id: str = Field(min_length=1, max_length=100)
     quantity: int = Field(gt=0, le=1000000, strict=True)
     unit: str = Field(min_length=1, max_length=30)
+    expected_revision: int | None = Field(default=None, gt=0)
 
 
 class ApprovalCreate(Contract):
@@ -121,15 +123,24 @@ class Intent(Contract):
     missing_fields: list[str] = Field(default_factory=list, max_length=10)
 
 
+ChatStatus = Literal[
+    "denied", "clarification", "not_available", "failed", "completed", "awaiting_approval"
+]
+
+
 class ChatResponse(Contract):
     request_id: str
     conversation_id: str
-    status: Literal["denied", "clarification", "not_available", "failed"]
+    status: ChatStatus
     message: str
     intent: Intent | None = None
     provider: str
     model: str
     error_code: str | None = None
+    data: dict[str, Any] = Field(default_factory=dict)
+    evidence: list[dict[str, Any]] = Field(default_factory=list)
+    timings_ms: dict[str, float] = Field(default_factory=dict)
+    model_calls: int = 0
 
 
 class AuditView(Contract):
@@ -140,3 +151,41 @@ class AuditView(Contract):
     request_id: str | None
     details: dict[str, Any]
     created_at: datetime
+
+
+class InventoryIssue(Contract):
+    event_id: str = Field(min_length=1, max_length=100)
+    scope: str = Field(min_length=1, max_length=100)
+    item_id: str = Field(min_length=1, max_length=100)
+    quantity: int = Field(gt=0, le=1000000, strict=True)
+    confirmed: Literal[True]
+
+
+class DocumentCreate(Contract):
+    id: str = Field(min_length=1, max_length=100)
+    scope: str = Field(min_length=1, max_length=100)
+    title: str = Field(min_length=1, max_length=200)
+    location: str = Field(min_length=1, max_length=200)
+    version: int = Field(gt=0)
+    text: str = Field(min_length=1, max_length=50000)
+    cloud_allowed: bool = False
+    facts: dict[str, Any] = Field(default_factory=dict)
+
+
+class GroundedAnswer(Contract):
+    answer: str = Field(min_length=1, max_length=6000)
+    citation_ids: list[str] = Field(min_length=1, max_length=5)
+
+
+class OntologyDefinition(Contract):
+    id: str = Field(min_length=1, max_length=100)
+    version: int = Field(gt=0)
+    types: list[str] = Field(min_length=1, max_length=100)
+    relations: list[dict[str, str]] = Field(max_length=100)
+
+    @field_validator("relations")
+    @classmethod
+    def validate_relations(cls, values: list[dict[str, str]]) -> list[dict[str, str]]:
+        if any(set(row) != {"kind", "source", "target"} for row in values):
+            raise ValueError("Each relation needs kind, source and target")
+        return values
