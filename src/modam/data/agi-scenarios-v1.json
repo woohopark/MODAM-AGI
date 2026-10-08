@@ -1,0 +1,573 @@
+{
+  "version": "agi-scenarios-v1",
+  "synthetic": true,
+  "cases": [
+    {
+      "case_id": "B01",
+      "message": "company 범위에서 합성 규정 1을 알려줘",
+      "scenario": "read",
+      "expected_status": "completed",
+      "expected_tools": 1,
+      "expected_fact": "발주 승인자는 재고 담당자입니다.",
+      "grants": [
+        {
+          "action": "documents.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "calls": [
+          {
+            "tool": "rag.search",
+            "scope": "company",
+            "arguments": {
+              "query": "규정 1"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": "completed",
+        "evidence": [
+          {
+            "ref": "policy:1:1:0",
+            "source_ref": "synthetic:policy:1",
+            "version": "1",
+            "as_of": "2026-10-08T00:00:00Z",
+            "text": "발주 승인자는 재고 담당자입니다.",
+            "cloud_allowed": true,
+            "scope": "company",
+            "freshness": "current"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "B02",
+      "message": "company 범위에서 합성 규정 2을 알려줘",
+      "scenario": "read",
+      "expected_status": "completed",
+      "expected_tools": 1,
+      "expected_fact": "안전 재고 기준은 10개입니다.",
+      "grants": [
+        {
+          "action": "documents.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "calls": [
+          {
+            "tool": "rag.search",
+            "scope": "company",
+            "arguments": {
+              "query": "규정 2"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": "completed",
+        "evidence": [
+          {
+            "ref": "policy:2:1:0",
+            "source_ref": "synthetic:policy:2",
+            "version": "1",
+            "as_of": "2026-10-08T00:00:00Z",
+            "text": "안전 재고 기준은 10개입니다.",
+            "cloud_allowed": true,
+            "scope": "company",
+            "freshness": "current"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "B03",
+      "message": "company 범위에서 합성 규정 3을 알려줘",
+      "scenario": "read",
+      "expected_status": "completed",
+      "expected_tools": 1,
+      "expected_fact": "목표 재고는 50개입니다.",
+      "grants": [
+        {
+          "action": "documents.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "calls": [
+          {
+            "tool": "rag.search",
+            "scope": "company",
+            "arguments": {
+              "query": "규정 3"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": "completed",
+        "evidence": [
+          {
+            "ref": "policy:3:1:0",
+            "source_ref": "synthetic:policy:3",
+            "version": "1",
+            "as_of": "2026-10-08T00:00:00Z",
+            "text": "목표 재고는 50개입니다.",
+            "cloud_allowed": true,
+            "scope": "company",
+            "freshness": "current"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "B04",
+      "message": "company 범위에서 합성 규정 4을 알려줘",
+      "scenario": "read",
+      "expected_status": "completed",
+      "expected_tools": 1,
+      "expected_fact": "발주는 초안까지만 작성합니다.",
+      "grants": [
+        {
+          "action": "documents.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "calls": [
+          {
+            "tool": "rag.search",
+            "scope": "company",
+            "arguments": {
+              "query": "규정 4"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": "completed",
+        "evidence": [
+          {
+            "ref": "policy:4:1:0",
+            "source_ref": "synthetic:policy:4",
+            "version": "1",
+            "as_of": "2026-10-08T00:00:00Z",
+            "text": "발주는 초안까지만 작성합니다.",
+            "cloud_allowed": true,
+            "scope": "company",
+            "freshness": "current"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "B05",
+      "message": "company 범위에서 합성 규정 5을 알려줘",
+      "scenario": "read",
+      "expected_status": "completed",
+      "expected_tools": 1,
+      "expected_fact": "문서 조회에는 현재 권한이 필요합니다.",
+      "grants": [
+        {
+          "action": "documents.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "calls": [
+          {
+            "tool": "rag.search",
+            "scope": "company",
+            "arguments": {
+              "query": "규정 5"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": "completed",
+        "evidence": [
+          {
+            "ref": "policy:5:1:0",
+            "source_ref": "synthetic:policy:5",
+            "version": "1",
+            "as_of": "2026-10-08T00:00:00Z",
+            "text": "문서 조회에는 현재 권한이 필요합니다.",
+            "cloud_allowed": true,
+            "scope": "company",
+            "freshness": "current"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "B06",
+      "message": "company 범위에서 합성 규정 6을 알려줘",
+      "scenario": "read",
+      "expected_status": "completed",
+      "expected_tools": 1,
+      "expected_fact": "원천 버전 변경 시 재승인이 필요합니다.",
+      "grants": [
+        {
+          "action": "documents.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "calls": [
+          {
+            "tool": "rag.search",
+            "scope": "company",
+            "arguments": {
+              "query": "규정 6"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": "completed",
+        "evidence": [
+          {
+            "ref": "policy:6:1:0",
+            "source_ref": "synthetic:policy:6",
+            "version": "1",
+            "as_of": "2026-10-08T00:00:00Z",
+            "text": "원천 버전 변경 시 재승인이 필요합니다.",
+            "cloud_allowed": true,
+            "scope": "company",
+            "freshness": "current"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "B07",
+      "message": "company 범위에서 합성 규정 7을 알려줘",
+      "scenario": "read",
+      "expected_status": "completed",
+      "expected_tools": 1,
+      "expected_fact": "중복 요청은 재실행하지 않습니다.",
+      "grants": [
+        {
+          "action": "documents.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "calls": [
+          {
+            "tool": "rag.search",
+            "scope": "company",
+            "arguments": {
+              "query": "규정 7"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": "completed",
+        "evidence": [
+          {
+            "ref": "policy:7:1:0",
+            "source_ref": "synthetic:policy:7",
+            "version": "1",
+            "as_of": "2026-10-08T00:00:00Z",
+            "text": "중복 요청은 재실행하지 않습니다.",
+            "cloud_allowed": true,
+            "scope": "company",
+            "freshness": "current"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "FND_AUTH01",
+      "message": "company 범위에서 합성 규정 1을 알려줘",
+      "scenario": "denied",
+      "expected_status": "denied",
+      "expected_tools": 0,
+      "expected_fact": "발주 승인자는 재고 담당자입니다.",
+      "grants": [
+        {
+          "action": "inventory.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "calls": [
+          {
+            "tool": "rag.search",
+            "scope": "company",
+            "arguments": {
+              "query": "규정 1"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": "completed",
+        "evidence": [
+          {
+            "ref": "policy:1:1:0",
+            "source_ref": "synthetic:policy:1",
+            "version": "1",
+            "as_of": "2026-10-08T00:00:00Z",
+            "text": "발주 승인자는 재고 담당자입니다.",
+            "cloud_allowed": true,
+            "scope": "company",
+            "freshness": "current"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "B08",
+      "message": "company 범위에서 합성 규정 1을 알려줘",
+      "scenario": "missing",
+      "expected_status": "clarification_required",
+      "expected_tools": 1,
+      "expected_fact": "발주 승인자는 재고 담당자입니다.",
+      "grants": [
+        {
+          "action": "documents.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "calls": [
+          {
+            "tool": "rag.search",
+            "scope": "company",
+            "arguments": {
+              "query": "규정 1"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": "completed"
+      }
+    },
+    {
+      "case_id": "C02",
+      "message": "company 범위에서 합성 규정 1을 알려줘",
+      "scenario": "disconnected",
+      "expected_status": "not_available",
+      "expected_tools": 1,
+      "expected_fact": "발주 승인자는 재고 담당자입니다.",
+      "grants": [
+        {
+          "action": "documents.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "calls": [
+          {
+            "tool": "rag.search",
+            "scope": "company",
+            "arguments": {
+              "query": "규정 1"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": "not_available",
+        "error_code": "tool_not_connected"
+      }
+    },
+    {
+      "case_id": "E01",
+      "message": "company 범위에서 합성 규정 1을 알려줘",
+      "scenario": "retry",
+      "expected_status": "completed",
+      "expected_tools": 2,
+      "expected_fact": "발주 승인자는 재고 담당자입니다.",
+      "grants": [
+        {
+          "action": "documents.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "calls": [
+          {
+            "tool": "rag.search",
+            "scope": "company",
+            "arguments": {
+              "query": "규정 1"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": "completed",
+        "evidence": [
+          {
+            "ref": "policy:1:1:0",
+            "source_ref": "synthetic:policy:1",
+            "version": "1",
+            "as_of": "2026-10-08T00:00:00Z",
+            "text": "발주 승인자는 재고 담당자입니다.",
+            "cloud_allowed": true,
+            "scope": "company",
+            "freshness": "current"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "E03",
+      "message": "company 범위에서 합성 규정 1을 알려줘",
+      "scenario": "conflict",
+      "expected_status": "clarification_required",
+      "expected_tools": 1,
+      "expected_fact": "발주 승인자는 재고 담당자입니다.",
+      "grants": [
+        {
+          "action": "documents.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "calls": [
+          {
+            "tool": "rag.search",
+            "scope": "company",
+            "arguments": {
+              "query": "규정 1"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": "completed",
+        "evidence": [
+          {
+            "ref": "policy:1:1:0",
+            "source_ref": "synthetic:policy:1",
+            "version": "1",
+            "as_of": "2026-10-08T00:00:00Z",
+            "text": "발주 승인자는 재고 담당자입니다.",
+            "cloud_allowed": true,
+            "scope": "company",
+            "freshness": "current"
+          },
+          {
+            "ref": "policy:1:1:0",
+            "source_ref": "synthetic:policy:1",
+            "version": "2",
+            "as_of": "2026-10-08T00:00:00Z",
+            "text": "발주 승인자는 재고 담당자입니다.",
+            "cloud_allowed": true,
+            "scope": "company",
+            "freshness": "current"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "E04",
+      "message": "company 범위에서 합성 규정 1을 알려줘",
+      "scenario": "no_cloud",
+      "expected_status": "denied",
+      "expected_tools": 0,
+      "expected_fact": "발주 승인자는 재고 담당자입니다.",
+      "grants": [
+        {
+          "action": "documents.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "calls": [
+          {
+            "tool": "rag.search",
+            "scope": "company",
+            "arguments": {
+              "query": "규정 1"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": "completed",
+        "evidence": [
+          {
+            "ref": "policy:1:1:0",
+            "source_ref": "synthetic:policy:1",
+            "version": "1",
+            "as_of": "2026-10-08T00:00:00Z",
+            "text": "발주 승인자는 재고 담당자입니다.",
+            "cloud_allowed": true,
+            "scope": "company",
+            "freshness": "current"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "E05",
+      "message": "company 범위에서 합성 규정 1을 알려줘",
+      "scenario": "clarification",
+      "expected_status": "clarification_required",
+      "expected_tools": 0,
+      "expected_fact": "발주 승인자는 재고 담당자입니다.",
+      "grants": [
+        {
+          "action": "documents.read",
+          "scopes": [
+            "company"
+          ]
+        }
+      ],
+      "plan": {
+        "question": "어떤 규정을 조회할까요?"
+      },
+      "response": {
+        "status": "completed",
+        "evidence": [
+          {
+            "ref": "policy:1:1:0",
+            "source_ref": "synthetic:policy:1",
+            "version": "1",
+            "as_of": "2026-10-08T00:00:00Z",
+            "text": "발주 승인자는 재고 담당자입니다.",
+            "cloud_allowed": true,
+            "scope": "company",
+            "freshness": "current"
+          }
+        ]
+      }
+    }
+  ]
+}

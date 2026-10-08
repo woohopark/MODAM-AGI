@@ -35,3 +35,11 @@ trace_id를 두 서비스까지 전파한다. RAG 검색 Hit는 RAG가 소유하
 ## 변경 도구
 
 RAG/온톨로지 관리 변경은 해당 MCP의 관리 권한·검토·중복 계약을 따른다. 재고 출고·알림 전달·발주 초안·ERP 등록은 위 두 조회 도구에 포함하지 않는다. 소속과 승인/결과조회 계약이 정해질 때 별도 도구로 등록한다.
+
+## Foundation 구현과 연결 결정
+
+현재는 Gateway/CallContext/ToolRegistry의 내부 계약과 3개 읽기 도구 스키마만 구현했다. 실제 MCP initialize/tools/list/tools/call·서비스/위임 인증은 아직 없다. Streamable HTTP와 공식 SDK 사용을 승인했으며 정확한 SDK·프로토콜 버전은 두 서버의 실제 협상/계약 테스트 후 고정한다. 임의 버전을 연결 성공으로 기록하지 않는다.
+
+권장 인증은 별도 서비스 audience의 짧은 수명 서명 위임 토큰이다. issuer/audience/subject/action/scope/policy_version/expiry를 검증하고 현재 정책 확인 경로를 마련한다. 키 배포·갱신과 즉시 회수 확인 계약은 단계 5의 선행 항목이다. CallContext는 서명 토큰이 아니며 그대로 네트워크 인증으로 사용하지 않는다.
+
+MCP hit를 내부 Evidence로 변환할 때 scope/ref/source_ref/version/as_of/freshness/text/cloud_allowed를 검증한다. 현재 상태 unknown/stale이면 모델 답변을 막는다. ToolResult는 업무 status와 안전한 error_code만 모델에 전달하고 raw transport/서버 오류는 별도 안전 코드로 정규화한다. 도구별 전체 JSON Schema는 실제 tools/list와 검증 후 확정한다.

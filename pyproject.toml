@@ -1,22 +1,20 @@
 [project]
 name = "modam-agi"
-version = "0.1.0"
-description = "MODAM-AGI common enterprise agent API"
+version = "0.2.0"
+description = "Groq-only orchestration foundation for independent MCP services"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "fastapi>=0.115,<1",
-  "uvicorn>=0.34,<1",
-  "sqlalchemy>=2.0,<3",
-  "psycopg[binary]>=3.2,<4",
-  "argon2-cffi>=23.1,<26",
+  "pydantic>=2.10,<3",
   "pydantic-settings>=2.7,<3",
   "httpx>=0.28,<1",
-  "langgraph>=1.0,<2",
-  "alembic>=1.14,<2",
+  "opentelemetry-sdk>=1.30,<2",
 ]
 
+[project.scripts]
+modam-evaluate = "modam.evaluation:main"
+
 [dependency-groups]
-dev = ["pytest>=8,<10", "ruff>=0.9,<1", "mypy>=1.15,<2"]
+dev = ["pytest>=8,<10", "pytest-asyncio>=0.25,<2", "ruff>=0.9,<1", "mypy>=1.15,<2"]
 
 [build-system]
 requires = ["hatchling"]
@@ -25,12 +23,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/modam"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"samples/warehouse_poc.json" = "modam/data/warehouse_poc.json"
-
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-markers = ["postgres: requires MODAM_TEST_DATABASE_URL pointing at an isolated test database"]
+testpaths = ["tests/unit", "tests/contracts"]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100

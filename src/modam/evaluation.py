@@ -1,373 +1,249 @@
-"""Independent functional and latency evaluation against fresh synthetic data."""
+"""Synthetic boundary evaluation only. Fixture adapters cannot be a production model."""
 
+import argparse
+import asyncio
 import hashlib
+import json
 import math
-import os
-import platform
-import socket
 import subprocess
-import sys
-import time
-from collections import defaultdict
-from collections.abc import Generator
-from contextlib import contextmanager
+from datetime import UTC, datetime
+from importlib.resources import files
 from pathlib import Path
-from tempfile import TemporaryDirectory
-from time import perf_counter
-from typing import Any, Literal
+from typing import Any
 
-import httpx
-from fastapi.testclient import TestClient
-
-from modam.api import create_app
 from modam.config import Settings
-from modam.db import make_engine, session_factory
-from modam.llm import GroqInterpreter, Interpreter
-from modam.models import Base
-from modam.sample import RecordedInterpreter, load_dataset, seed_sample
-from modam.schemas import GroundedAnswer, Intent
-
-Mode = Literal["offline", "groq"]
-Transport = Literal["asgi", "http"]
+from modam.engine import Engine
+from modam.llm import GroqModel
+from modam.observability import Observer
+from modam.schemas import Evidence, Grant, GroundedAnswer, Plan, Request, ToolCall, ToolResult
+from modam.tools import CallContext, DisconnectedGateway, ToolError, ToolRegistry
 
 
-def statistics(values: list[float]) -> dict[str, float | int]:
-    if not values:
-        raise ValueError("Cannot compute latency statistics for zero measurements")
+class EvaluationAuthority:
+    """Synthetic verified identity at the test boundary; not an authentication service."""
+
+    def __init__(self, grants: list[Grant]) -> None:
+        self.grants = grants
+
+    async def is_active(self, subject: str) -> bool:
+        return subject == "synthetic:evaluator"
+
+    async def can_send(self, subject: str, scope: str | None) -> bool:
+        return subject == "synthetic:evaluator"
+
+    async def permits(self, subject: str, action: str, scope: str) -> bool:
+        return subject == "synthetic:evaluator" and any(
+            g.action == action and (scope in g.scopes or "*" in g.scopes) for g in self.grants
+        )
+
+
+class EvaluationModel:
+    provider = "boundary-fixture"
+    model_id = "agi-scenarios-v1"
+
+    def __init__(self, plan: Plan) -> None:
+        self._plan = plan
+
+    async def plan(
+        self, request: Request, observations: list[str], catalog: list[dict[str, object]]
+    ) -> Plan:
+        return self._plan
+
+    async def answer(self, message: str, evidence: list[Evidence]) -> GroundedAnswer:
+        return GroundedAnswer(
+            answer="\n".join(e.text for e in evidence), citation_ids=[e.ref for e in evidence]
+        )
+
+
+class EvaluationGateway:
+    def __init__(self, response: ToolResult, retry: bool) -> None:
+        self.response, self.retry = response, retry
+        self.calls = 0
+
+    async def call(self, call: ToolCall, context: CallContext) -> ToolResult:
+        self.calls += 1
+        if self.retry and self.calls == 1:
+            raise ToolError("tool_timeout", retryable=True)
+        return self.response
+
+
+def dataset_bytes() -> bytes:
+    return files("modam").joinpath("data/agi-scenarios-v1.json").read_bytes()
+
+
+def load_dataset() -> dict[str, Any]:
+    return dict(json.loads(dataset_bytes()))
+
+
+def latency(values: list[float]) -> dict[str, float | int | None]:
     ordered = sorted(values)
-
-    def percentile(fraction: float) -> float:
-        return round(ordered[max(0, math.ceil(len(ordered) * fraction) - 1)], 3)
-
     return {
         "count": len(values),
-        "p50_ms": percentile(0.5),
-        "p95_ms": percentile(0.95),
-        "mean_ms": round(sum(values) / len(values), 3),
-        "max_ms": round(max(values), 3),
+        "p50_ms": ordered[math.ceil(len(values) * 0.5) - 1] if values else None,
+        "p95_ms": ordered[math.ceil(len(values) * 0.95) - 1] if values else None,
     }
 
 
-class MeteredInterpreter:
-    def __init__(self, delegate: Interpreter) -> None:
-        self.delegate = delegate
-        self.provider, self.model = delegate.provider, delegate.model
-        self.calls: list[dict[str, Any]] = []
-
-    def interpret(self, message: str, history: list[str]) -> Intent:
-        started = perf_counter()
-        try:
-            return self.delegate.interpret(message, history)
-        finally:
-            self.calls.append(
-                {"kind": "interpret", "elapsed_ms": (perf_counter() - started) * 1000}
-            )
-
-    def answer(self, question: str, contexts: list[dict[str, Any]]) -> GroundedAnswer:
-        started = perf_counter()
-        try:
-            return self.delegate.answer(question, contexts)
-        finally:
-            self.calls.append({"kind": "answer", "elapsed_ms": (perf_counter() - started) * 1000})
-
-
-class ScenarioFailure(Exception):
-    pass
-
-
-def run_scenario(
-    client: TestClient | httpx.Client, credentials: dict[str, str], mode: Mode
-) -> dict[str, Any]:
-    headers = {}
-    for name, password in credentials.items():
-        response = client.post("/v1/auth/login", json={"username": name, "password": password})
-        if response.status_code != 200:
-            raise ScenarioFailure("sample_login")
-        headers[name] = {"Authorization": "Bearer " + response.json()["token"]}
-    field, manager, accountant = [
-        headers[name] for name in ("sample_field", "sample_inventory", "sample_accounting")
-    ]
-    latencies: dict[str, list[float]] = defaultdict(list)
-    checks: list[dict[str, Any]] = []
-    workflow_start = perf_counter()
-    model_attempts = 0
-
-    def request(
-        label: str,
-        method: str,
-        path: str,
-        auth: dict[str, str],
-        payload: dict[str, Any] | None = None,
-    ) -> Any:
-        started = perf_counter()
-        response = client.request(method, path, headers=auth, json=payload)
-        latencies[label].append((perf_counter() - started) * 1000)
-        return response
-
-    def check(label: str, success: bool) -> None:
-        checks.append({"check": label, "passed": bool(success)})
-        if not success:
-            raise ScenarioFailure(label)
-
-    def chat(label: str, message: str, auth: dict[str, str]) -> dict[str, Any]:
-        response = request(
-            label,
-            "POST",
-            "/v1/chat",
-            auth,
-            {"request_id": label, "message": message, "cloud_allowed": mode == "groq"},
-        )
-        check(label + ":http", response.status_code == 200)
-        body = dict(response.json())
-        nonlocal model_attempts
-        model_attempts += int(body.get("model_calls", 0))
-        check(label + ":model", body.get("status") != "failed")
-        for phase, duration in body.get("timings_ms", {}).items():
-            latencies["agent:" + phase].append(float(duration))
-        return body
-
-    rag_correct = 0
+def revision() -> str:
     try:
-        denied = chat("denied_purchase", "창고 B의 물품 C 100개 발주해 줘", accountant)
-        check(
-            "accounting_cannot_purchase",
-            denied["status"] == "denied" and not denied["data"] and not denied["evidence"],
-        )
-        for i, case in enumerate(load_dataset()["rag_cases"]):
-            answer = chat(f"rag_{i}", case["question"], accountant)
-            correct = (
-                answer["status"] == "completed"
-                and case["expected_text"] in answer["message"]
-                and any(e["source_id"] == case["source_id"] for e in answer["evidence"])
-            )
-            rag_correct += int(correct)
-            checks.append({"check": f"rag_{i}:facts_and_source", "passed": correct})
-        check("rag_5_of_7", rag_correct >= 5)
-        event = {
-            "event_id": "synthetic-erp-outbound-1",
-            "scope": "B",
-            "item_id": "C",
-            "quantity": 100,
-            "confirmed": True,
-        }
-        issued = request("inventory_issue", "POST", "/v1/inventory/events", field, event)
-        check("issue_http", issued.status_code == 200)
-        check(
-            "stock_8_reorder_42",
-            issued.json()["quantity"] == 8 and issued.json()["suggested_quantity"] == 42,
-        )
-        repeat = request("event_replay", "POST", "/v1/inventory/events", field, event)
-        check("event_dedup", repeat.status_code == 200 and repeat.json() == issued.json())
-        graph = request("graph", "GET", "/v1/graph?scope=B&start=warehouse:B", field)
-        check(
-            "related_objects",
-            graph.status_code == 200
-            and {"inventory:B:C", "item:C", "rule:B:C"} <= {n["id"] for n in graph.json()["nodes"]},
-        )
-        alerts = request("notifications", "GET", "/v1/notifications", manager)
-        check(
-            "manager_alert",
-            alerts.status_code == 200
-            and len(alerts.json()) == 1
-            and alerts.json()[0]["details"]["suggested_quantity"] == 42,
-        )
-        analysis = chat("inventory_analysis", "창고 B 물품 C 재고와 후속 업무를 확인해줘", field)
-        check(
-            "stock_analysis",
-            analysis["status"] == "completed"
-            and analysis["data"]["suggested_quantity"] == 42
-            and bool(analysis["evidence"]),
-        )
-        proposal = chat("purchase_proposal", "창고 B 물품 C 42개 발주 제안해줘", field)
-        check("approval_required", proposal["status"] == "awaiting_approval")
-        approval_id = proposal["data"]["approval_id"]
-        forbidden = request(
-            "forbidden_approval",
-            "POST",
-            f"/v1/approvals/{approval_id}/decision",
-            accountant,
-            {"decision": "approved"},
-        )
-        check("accounting_cannot_approve", forbidden.status_code == 404)
-        premature = request(
-            "premature_execution", "POST", f"/v1/approvals/{approval_id}/execute", manager
-        )
-        check("no_execution_before_approval", premature.status_code == 409)
-        decision = request(
-            "approval",
-            "POST",
-            f"/v1/approvals/{approval_id}/decision",
-            manager,
-            {"decision": "approved"},
-        )
-        check("manager_approves", decision.status_code == 200)
-        draft = request("draft", "POST", f"/v1/approvals/{approval_id}/execute", manager)
-        check(
-            "draft_created",
-            draft.status_code == 200
-            and draft.json()["quantity"] == 42
-            and not draft.json()["erp_registered"],
-        )
-        replay = request("draft_replay", "POST", f"/v1/approvals/{approval_id}/execute", manager)
-        check(
-            "draft_dedup", replay.status_code == 200 and replay.json()["id"] == draft.json()["id"]
-        )
-        stock = request("final_stock", "GET", "/v1/inventory/B/C", field)
-        check(
-            "pending_orders_prevent_repeat",
-            stock.status_code == 200
-            and stock.json()["quantity"] == 8
-            and stock.json()["pending_quantity"] == 42
-            and stock.json()["suggested_quantity"] == 0,
-        )
-        result: dict[str, Any] = {"passed": True}
-    except ScenarioFailure as exc:
-        result = {"passed": False, "failed_check": str(exc)}
-    result.update(
-        {
-            "rag_correct": rag_correct,
-            "model_call_attempts": model_attempts,
-            "checks": checks,
-            "latencies": dict(latencies),
-            "workflow_ms": (perf_counter() - workflow_start) * 1000,
-        }
-    )
-    return result
-
-
-def evaluate(
-    mode: Mode = "offline", repeats: int = 5, warmup: int = 1, transport: Transport = "asgi"
-) -> dict[str, Any]:
-    if not 1 <= repeats <= 50 or not 0 <= warmup <= 10:
-        raise ValueError("repeats must be 1..50 and warmup 0..10")
-    settings = Settings()
-    if mode == "groq" and not settings.groq_api_key.get_secret_value():
-        raise ValueError("GROQ_API_KEY must be injected securely for actual Groq evaluation")
-    if transport not in ("asgi", "http"):
-        raise ValueError("Unknown evaluation transport")
-    if mode not in ("offline", "groq"):
-        raise ValueError("Unknown evaluation mode")
-    results, measurements = [], defaultdict(list)
-    warmup_outcomes, real_calls = [], 0
-    for index in range(repeats + warmup):
-        with TemporaryDirectory(prefix="modam-scenario-") as directory:
-            engine = make_engine("sqlite:///" + str(Path(directory) / "scenario.db"))
-            Base.metadata.create_all(engine)
-            with session_factory(engine)() as db:
-                credentials = seed_sample(db)
-            delegate: Interpreter = (
-                RecordedInterpreter() if mode == "offline" else GroqInterpreter(settings)
-            )
-            metered = MeteredInterpreter(delegate)
-            app = create_app(settings, metered, engine)
-            try:
-                with (
-                    TestClient(app) if transport == "asgi" else socket_client(directory, mode)
-                ) as client:
-                    result = run_scenario(client, credentials, mode)
-                if index < warmup:
-                    warmup_outcomes.append(result["passed"])
-                    continue
-                results.append(result)
-                # Failed runs are retained, but never mixed into successful latency summaries.
-                if result["passed"]:
-                    measurements["workflow"].append(result["workflow_ms"])
-                    for label, durations in result["latencies"].items():
-                        measurements[label].extend(durations)
-                    for call in metered.calls:
-                        measurements["model:" + call["kind"]].append(call["elapsed_ms"])
-                if mode == "groq":
-                    real_calls += int(result["model_call_attempts"])
-            finally:
-                engine.dispose()
-    try:
-        revision = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL, text=True
         ).strip()
-    except subprocess.CalledProcessError:
-        revision = "unknown"
-    return {
-        "mode": mode,
-        "provider": "recorded-fixture" if mode == "offline" else "groq",
-        "model": "warehouse-poc-v1" if mode == "offline" else settings.groq_model,
-        "dataset_version": load_dataset()["version"],
-        "git_commit": revision,
+    except (subprocess.CalledProcessError, OSError):
+        return "unknown"
+
+
+async def evaluate(
+    *,
+    mode: str = "boundary",
+    repeats: int = 1,
+    warmup: int = 0,
+    dataset: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if mode not in {"boundary", "groq"} or not 1 <= repeats <= 20 or not 0 <= warmup <= 5:
+        raise ValueError("Invalid evaluation options")
+    data = dataset or load_dataset()
+    settings = Settings()
+    report: dict[str, Any] = {
+        "dataset_version": data["version"],
+        "dataset_sha256": hashlib.sha256(
+            json.dumps(data, sort_keys=True, ensure_ascii=False).encode()
+        ).hexdigest(),
+        "git_sha": revision(),
         "working_tree_dirty": bool(
-            subprocess.check_output(["git", "status", "--porcelain"], text=True)
-        ),
-        "dataset_sha256": hashlib.sha256(json_dataset()).hexdigest(),
-        "transport": "in-process-ASGI" if transport == "asgi" else "loopback-HTTP",
-        "database": "fresh SQLite per run",
-        "python": platform.python_version(),
-        "cpu_count": os.cpu_count(),
-        "warmup_runs": warmup,
-        "warmup_passed": sum(warmup_outcomes),
-        "measured_runs": repeats,
-        "passed_runs": sum(r["passed"] for r in results),
-        "real_llm_calls": real_calls,
-        "metrics": {key: statistics(values) for key, values in measurements.items()},
-        "results": results,
-        "timing_excludes": ["data seeding", "schema creation", "login", "warmup"],
+            subprocess.check_output(
+                ["git", "status", "--porcelain"], text=True, stderr=subprocess.DEVNULL
+            )
+        )
+        if revision() != "unknown"
+        else None,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "mode": mode,
+        "model_id": settings.groq_model if mode == "groq" else "boundary-fixture",
+        "prompt_version": settings.prompt_version,
+        "contract_version": "0.1",
+        "config_version": settings.config_version,
+        "repeats": repeats,
+        "warmup": warmup,
+        "real_mcp_connected": False,
+        "real_groq_attempts": 0,
+        "status": "unrun",
+        "results": [],
         "limitations": [
-            "Offline mode measures reference responses, not LLM intelligence.",
-            "ASGI timings omit sockets; loopback HTTP omits WAN and production concurrency.",
-            "Retrieval is sparse lexical vectors, not semantic embedding.",
+            "Boundary fixtures do not measure Groq accuracy or MCP integration.",
+            "Groq mode evaluates planning with disconnected MCP tools only.",
+            "Identity, persistence, approval and mutation flows are not implemented.",
         ],
     }
-
-
-def json_dataset() -> bytes:
-    import json
-
-    return json.dumps(load_dataset(), sort_keys=True, ensure_ascii=False).encode()
-
-
-@contextmanager
-def socket_client(directory: str, mode: Mode) -> Generator[httpx.Client, None, None]:
-    """Run a real server against the already seeded disposable scenario database."""
-    child_env = dict(os.environ)
-    child_env["MODAM_SCENARIO_DATABASE"] = str(Path(directory) / "scenario.db")
-    child_env["MODAM_SCENARIO_MODE"] = mode
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        listener.listen(128)
-        port = listener.getsockname()[1]
-        process = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "uvicorn",
-                "modam.demo:scenario_app",
-                "--factory",
-                "--fd",
-                str(listener.fileno()),
-            ],
-            env=child_env,
-            pass_fds=(listener.fileno(),),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        try:
-            with httpx.Client(
-                base_url=f"http://127.0.0.1:{port}", timeout=120, trust_env=False
-            ) as client:
-                deadline = time.monotonic() + 20
-                while True:
-                    if process.poll() is not None:
-                        raise ValueError("Scenario HTTP server exited before readiness")
-                    try:
-                        if client.get("/health/ready").status_code == 200:
-                            break
-                    except httpx.HTTPError:
-                        pass
-                    if time.monotonic() > deadline:
-                        raise ValueError("Scenario HTTP readiness timed out")
-                    time.sleep(0.1)
-                yield client
-        finally:
-            process.terminate()
+    if mode == "groq" and not settings.groq_api_key.get_secret_value():
+        report.update(status="blocked", reason="model_key_missing", latency=latency([]))
+        return report
+    measured: list[float] = []
+    stages: dict[str, list[float]] = {}
+    warmup_failed = False
+    for repetition in range(warmup + repeats):
+        for case in data["cases"]:
+            # Real Groq mode only checks read planning against a disconnected gateway.
+            if mode == "groq" and case["scenario"] != "read":
+                continue
+            observer = Observer()
+            real_model = GroqModel(settings) if mode == "groq" else None
+            model = real_model or EvaluationModel(Plan.model_validate(case["plan"]))
+            gateway = (
+                DisconnectedGateway()
+                if real_model
+                else EvaluationGateway(
+                    ToolResult.model_validate(case["response"]), case["scenario"] == "retry"
+                )
+            )
+            runner = Engine(
+                model,
+                gateway,
+                EvaluationAuthority([Grant.model_validate(g) for g in case["grants"]]),
+                ToolRegistry(),
+                observer,
+                settings,
+            )
             try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
+                result = await runner.run(
+                    Request(
+                        request_id=f"{repetition}:{case['case_id']}",
+                        subject_ref="synthetic:evaluator",
+                        message=case["message"],
+                        cloud_allowed=case["scenario"] != "no_cloud",
+                    )
+                )
+                expected = "not_available" if real_model else case["expected_status"]
+                checks = {
+                    "status": result.status == expected,
+                    "tool_count": result.tool_calls
+                    == (1 if real_model else case["expected_tools"]),
+                    "trace": bool(observer.spans()),
+                }
+                if expected == "completed":
+                    checks["fact"] = case["expected_fact"] in result.message
+                    checks["citation"] = bool(result.evidence)
+                passed = all(checks.values())
+                if real_model:
+                    report["real_groq_attempts"] += real_model.attempts
+                if repetition < warmup:
+                    warmup_failed |= not passed
+                    continue
+                report["results"].append(
+                    {
+                        "case_id": case["case_id"],
+                        "repeat": repetition - warmup,
+                        "status": "passed" if passed else "failed",
+                        "checks": checks,
+                        "run_status": result.status,
+                        "error_code": result.error_code,
+                        "duration_ms": result.elapsed_ms,
+                        "model_usage": real_model.last_usage if real_model else None,
+                    }
+                )
+                if passed:
+                    measured.append(result.elapsed_ms)
+                    for span in observer.spans():
+                        if span.start_time is not None and span.end_time is not None:
+                            stages.setdefault(span.name, []).append(
+                                (span.end_time - span.start_time) / 1_000_000
+                            )
+            finally:
+                observer.close()
+                if real_model:
+                    await real_model.close()
+    report["warmup_failed"] = warmup_failed
+    report["status"] = (
+        "passed"
+        if report["results"]
+        and all(r["status"] == "passed" for r in report["results"])
+        and not warmup_failed
+        else "failed"
+    )
+    report["latency"] = latency(measured)
+    report["stage_latency"] = {stage: latency(values) for stage, values in stages.items()}
+    report["passed"] = sum(r["status"] == "passed" for r in report["results"])
+    report["failed"] = len(report["results"]) - report["passed"]
+    return report
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="MODAM foundation evaluation; no production writes"
+    )
+    parser.add_argument("--mode", choices=["boundary", "groq"], default="boundary")
+    parser.add_argument("--repeat", type=int, default=1)
+    parser.add_argument("--warmup", type=int, default=0)
+    parser.add_argument("--output", type=Path, default=Path(".local/reports/foundation.json"))
+    args = parser.parse_args()
+    report = asyncio.run(evaluate(mode=args.mode, repeats=args.repeat, warmup=args.warmup))
+    args.output.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    print(json.dumps({"status": report["status"], "report": str(args.output)}, ensure_ascii=False))
+    raise SystemExit(
+        0 if report["status"] == "passed" else 2 if report["status"] == "blocked" else 1
+    )
+
+
+if __name__ == "__main__":
+    main()

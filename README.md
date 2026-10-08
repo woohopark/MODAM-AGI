@@ -1,21 +1,34 @@
 # MODAM-AGI
 
-Chat 업무 에이전트의 오케스트레이션 프로젝트다. 모델은 Groq만 사용하며 RAG와 온톨로지는 독립 MCP 서비스로 호출한다. Evaluation·Observability는 첫 구현부터 최소 로그·트레이싱·테스트 데이터셋을 포함한다. 화면은 별도 저장소다.
+Groq만 사용하는 업무 오케스트레이션 기반이다. RAG/온톨로지는 독립 MCP 서비스로 연결하며 AGI가 문서·벡터·그래프 저장소를 직접 조회하지 않는다. 화면은 MODAM-CHAT이다.
 
-프로젝트별 설계 문서와 저장소 반영을 승인받았다. 현재 코드에는 이전 단일 서비스 구현이 남아 있으며 이번 변경은 문서에 한정한다. 코드 삭제·새 MCP 구조 구현 완료를 의미하지 않는다.
+현재 첫 개발 묶음: 비동기 Groq 어댑터, 한도가 있는 읽기 상태 머신, 주입형 현재 권한/전송 정책, 로컬 구조화 로그·OpenTelemetry 트레이스, 고정 합성 평가 데이터셋.
+로그인·HTTP 서비스·PostgreSQL 영속 상태·승인 실행·실제 MCP 연결은 후속 단계다. 지금 배포된 AGI 서비스 주소는 없다.
+
+## 실행 및 검증
+
+Python 3.12와 uv가 필요하다.
+
+```bash
+uv sync --frozen
+uv run pytest -q
+uv run modam-evaluate --repeat 3 --warmup 1 --output .local/reports/boundary.json
+uv run modam-evaluate --mode groq --output .local/reports/groq.json
+```
+
+boundary는 명시적인 모델/도구/신원 경계 대역 평가다. 실제 LLM 정확도 또는 MCP 통합 결과가 아니다.
+groq는 환경변수 GROQ_API_KEY를 사용해 합성 질문의 계획만 실제 호출하며 MCP는 미연결이다. 키가 없으면 blocked 및 종료 코드 2다. 키를 명령 인자/문서/Git에 넣지 않는다.
 
 | 문서 | 내용 |
 |---|---|
-| [PRD](PRD.md) | AGI 목표·책임·요구사항·성공 기준 |
-| [아키텍처](ARCHITECTURE.md) | 오케스트레이션·Groq·MCP·상태 경계 |
-| [API 계약](API_CONTRACT.md) | Chat·사용자·승인·관리 계약 |
-| [MCP 연동](MCP_INTEGRATION.md) | 인증·허용 도구·버전·근거·오류 |
-| [Observability](OBSERVABILITY.md) | 최소 로그·단계 트레이스·지표 |
-| [평가](EVALUATION.md) | 고정 데이터셋·TDD·실제 모델·성능 |
-| [개발 계획](IMPLEMENTATION_PLAN.md) | 코드 정리와 신규 구현 단계 |
-| [상태](STATUS.md) | 이전 구현과 신규 설계·검증의 구분 |
+| [PRD](PRD.md) | 요구사항·성공 기준 |
+| [AGENT](AGENT.md) / [SKILL](SKILL.md) / [AGENTS](AGENTS.md) | 제품 행동·목표 해결·개발 지침 |
+| [DEVELOPMENT](DEVELOPMENT.md) / [패키지](docs/PACKAGES.md) | 승인 기술·컨벤션·설치 |
+| [ARCHITECTURE](ARCHITECTURE.md) / [API_CONTRACT](API_CONTRACT.md) | 현재 경계와 후속 API |
+| [MCP_INTEGRATION](MCP_INTEGRATION.md) | 독립 MCP 계약·미결정 항목 |
+| [OBSERVABILITY](OBSERVABILITY.md) / [EVALUATION](EVALUATION.md) | 로그·트레이스·평가 |
+| [계획](IMPLEMENTATION_PLAN.md) / [상태](STATUS.md) / [검토 결과](docs/FOUNDATION_REVIEW.md) | 구현·검증·제약 |
+| [실행 안내](docs/RUNBOOK.md) | 새 명령과 복구 기준 |
 
-독립 프로젝트: [MODAM-RAG](https://github.com/woohopark/MODAM-RAG) · [MODAM-ONTOLOGY](https://github.com/woohopark/MODAM-ONTOLOGY).
-
-[플랫폼 전체 책임](docs/PLATFORM_OVERVIEW.md) · [문서 분리·게시 기록](docs/REVIEW.md) · [개발 기준](DEVELOPMENT.md) · [에이전트 원칙](AGENT.md) · [절차](SKILL.md).
-이전 설계/검증 결과는 [이력](docs/legacy/INDEX.md)에 보존한다. 다른 프로젝트 전체 문서는 각각의 저장소에서 관리한다.
+[MODAM-RAG](https://github.com/woohopark/MODAM-RAG) · [MODAM-ONTOLOGY](https://github.com/woohopark/MODAM-ONTOLOGY) · [MODAM-CHAT](https://github.com/woohopark/MODAM-CHAT).
+이전 단일 서비스는 [문서 이력](docs/legacy/INDEX.md)과 Git 기준점에 보존했다. 이전 44+8 테스트를 신규 구조 통과로 집계하지 않는다.
