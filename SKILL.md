@@ -1,6 +1,6 @@
 ---
-name: inqolab-goal-solving
-description: 허용된 도구로 새로운 업무 목표를 계획·수행·검증·재계획하는 INQOLAB 에이전트의 작업 절차.
+name: modam-agi-goal-solving
+description: 허용된 도구로 새로운 업무 목표를 계획·수행·검증·재계획하는 MODAM-AGI 에이전트의 작업 절차.
 ---
 
 # 목표 해결 절차

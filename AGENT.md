@@ -1,4 +1,4 @@
-# INQOLAB 에이전트 행동 원칙
+# MODAM-AGI 에이전트 행동 원칙
 
 기준: [PRD.md](PRD.md). 수행 절차: [SKILL.md](SKILL.md).
 
