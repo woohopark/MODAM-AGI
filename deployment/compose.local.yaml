@@ -1,0 +1,66 @@
+name: modam-chat-stack
+services:
+  postgres:
+    image: postgres:17-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: modam
+      POSTGRES_DB: modam_chat
+      POSTGRES_PASSWORD: ${MODAM_DATABASE_PASSWORD:?Set a generated database password}
+    volumes:
+      - chat-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U modam -d modam_chat]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  migrate:
+    build: &agi-build
+      context: ..
+    environment: &agi-env
+      MODAM_DATABASE_URL: postgresql+psycopg://modam:${MODAM_DATABASE_PASSWORD}@postgres:5432/modam_chat
+      MODAM_API_HOST: 0.0.0.0
+      MODAM_GROQ_MODEL: openai/gpt-oss-120b
+    command: [alembic, upgrade, head]
+    depends_on:
+      postgres: {condition: service_healthy}
+  agi:
+    build: *agi-build
+    restart: unless-stopped
+    environment: *agi-env
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    # API never needs the Groq key; only the worker receives it.
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  worker:
+    build: *agi-build
+    restart: unless-stopped
+    environment: *agi-env
+    env_file: [../.local/groq.env]
+    command: [modam-worker]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  chat:
+    build:
+      context: ../../modam-chat
+    restart: unless-stopped
+    environment:
+      MODAM_AGI_URL: http://agi:8000
+      MODAM_BFF_HOST: 0.0.0.0
+      NODE_ENV: ${MODAM_NODE_ENV:-development}
+      MODAM_PUBLIC_ORIGINS: ${MODAM_PUBLIC_ORIGINS:-http://127.0.0.1:3300,http://localhost:3300}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/health').then(r => {if(!r.ok) process.exit(1)}).catch(() => process.exit(1))"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    ports:
+      - 127.0.0.1:${MODAM_CHAT_PORT:-3300}:3000
+    depends_on:
+      agi: {condition: service_healthy}
+volumes:
+  chat-data:

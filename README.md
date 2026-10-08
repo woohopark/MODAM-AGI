@@ -7,6 +7,10 @@ Groq만 사용하는 업무 오케스트레이션 기반이다. RAG/온톨로지
 
 [CHAT 연동 계약](docs/CHAT_INTEGRATION.md) · [Docker/실행/주소](docs/CHAT_DEPLOYMENT.md).
 
+## 내 PC에서 실행
+
+[로컬 PC 실행 안내](docs/LOCAL_PC.md)를 따른다. Docker를 켜고 `python scripts/local-chat.py setup`, `start`, `account`를 순서대로 실행하면 http://localhost:3300에서 실제 대화할 수 있다.
+
 ## 실행 및 검증
 
 Python 3.12와 uv가 필요하다.

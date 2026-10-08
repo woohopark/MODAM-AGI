@@ -33,3 +33,11 @@ workspace 내부 native BFF http://127.0.0.1:3000, Docker BFF http://127.0.0.1:3
 실제 RAG/ONTOLOGY MCP·서명 위임·승인/알림/ERP 변경 도구, 임의 Role 정의/Role grant 템플릿, 운영 DB 백업/암호화·동시 부하·SLO·외부 운영 배포는 후속이다. Admin은 기업 실행 grant를 자동 상속하지 않는다. 전체 PRD/범용 AGI 완성을 주장하지 않는다.
 
 이전 foundation 검증과 기준점은 docs/FOUNDATION_REVIEW.md, docs/legacy와 baseline-monolith-cadea94 Git tag에 보존한다. 신규 chat DB/volume만 생성했으며 기존 DB/volume은 삭제하지 않았다.
+
+## 로컬 PC 실행 보완
+
+일반 PC용 compose.local.yaml과 표준 라이브러리 setup/start/account/status/stop 명령을 추가했다. CA secret은 별도 신뢰 저장소가 필요한 환경에서 선택 제공하며 일반 PC는 컨테이너 기본 CA를 사용한다. TLS 검증을 유지한다. 설정은 랜덤 DB 비밀번호/키를 로컬에 생성하며 기존 값을 덮지 않는다. [PC 안내](docs/LOCAL_PC.md)를 따른다.
+
+이번 보완 검증: AGI 37개 테스트·Ruff/mypy·wheel, CHAT 73개·npm run check 통과. 일반 PC compose를 이 Linux 환경의 CA override와 함께 빌드/실행하여 API/BFF/DB health 및 migration 완료를 확인했다. Windows/macOS 실기기 검증은 미수행이다.
+
+일반 PC compose 기반 서비스에서 실제 Groq 3턴·SSE·대화 저장/복원도 통과했다(.local/reports/local-compose-live.json).
